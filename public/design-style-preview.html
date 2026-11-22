@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Productivier v3 — Design System & Style Guide</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: radial-gradient(circle at 85% 90%, #DFCBB5 0%, #EFE7DC 45%, #F7F4EF 100%);
+      color: #111827;
+      min-height: 100vh;
+    }
+    .tabular-nums { font-variant-numeric: tabular-nums; }
+  </style>
+</head>
+<body class="p-4 md:p-8">
+  <div class="max-w-6xl mx-auto space-y-10">
+
+    <!-- HEADER STYLE GUIDE -->
+    <div class="bg-white/80 backdrop-blur-md border border-black/5 rounded-3xl p-6 flex flex-wrap items-center justify-between gap-4 shadow-sm">
+      <div>
+        <div class="text-xs font-bold uppercase tracking-wider text-teal-700">Design System & Component Preview</div>
+        <h1 class="text-2xl font-bold tracking-tight mt-1">Productivier v3 — Warm Editorial & Team Monitoring</h1>
+        <p class="text-sm text-gray-500 mt-0.5">Panduan visual sebelum implementasi penuh ke Next.js App Router.</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="px-3 py-1.5 rounded-full bg-[#111827] text-white text-xs font-semibold">100% Pure SVG</span>
+        <span class="px-3 py-1.5 rounded-full bg-[#FDE047] text-[#111827] text-xs font-semibold">Zero AI Slop</span>
+      </div>
+    </div>
+
+    <!-- 1. PALET WARNA -->
+    <section class="space-y-3">
+      <h2 class="text-sm font-bold uppercase tracking-wider text-gray-500">01. Palet Warna (60 / 30 / 10)</h2>
+      <div class="grid grid-cols-2 sm:grid-cols-5 gap-3">
+        <div class="bg-white rounded-2xl p-3 border border-black/5">
+          <div class="h-14 rounded-xl bg-[#F5F1EB] border border-black/10"></div>
+          <div class="mt-2 text-xs font-bold">Warm Sand</div>
+          <div class="text-[11px] text-gray-500 tabular-nums">#F5F1EB (Canvas)</div>
+        </div>
+        <div class="bg-white rounded-2xl p-3 border border-black/5">
+          <div class="h-14 rounded-xl bg-white border border-black/10"></div>
+          <div class="mt-2 text-xs font-bold">Crisp White</div>
+          <div class="text-[11px] text-gray-500 tabular-nums">#FFFFFF (Cards)</div>
+        </div>
+        <div class="bg-white rounded-2xl p-3 border border-black/5">
+          <div class="h-14 rounded-xl bg-[#111827]"></div>
+          <div class="mt-2 text-xs font-bold">Ink Obsidian</div>
+          <div class="text-[11px] text-gray-500 tabular-nums">#111827 (Sidebar & Pill)</div>
+        </div>
+        <div class="bg-white rounded-2xl p-3 border border-black/5">
+          <div class="h-14 rounded-xl bg-[#FDE047]"></div>
+          <div class="mt-2 text-xs font-bold">Butter Yellow</div>
+          <div class="text-[11px] text-gray-500 tabular-nums">#FDE047 (Highlight)</div>
+        </div>
+        <div class="bg-white rounded-2xl p-3 border border-black/5">
+          <div class="h-14 rounded-xl bg-[#10B981]"></div>
+          <div class="mt-2 text-xs font-bold">Emerald</div>
+          <div class="text-[11px] text-gray-500 tabular-nums">#10B981 (Tercapai)</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. FULL LAYOUT PREVIEW (DARK FLOATING SIDEBAR + 3-COL LISSO WORKSPACE) -->
+    <section class="space-y-3">
+      <h2 class="text-sm font-bold uppercase tracking-wider text-gray-500">02. Preview Layout Desktop (Dark Floating Sidebar + 3-Column Workspace)</h2>
+      <div class="rounded-[32px] border border-black/10 bg-[#F5F1EB]/90 p-4 md:p-6 shadow-xl overflow-hidden">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+
+          <!-- DARK FLOATING SIDEBAR -->
+          <aside class="lg:col-span-3 bg-[#111827] text-white rounded-3xl p-4 flex flex-col justify-between min-h-[540px] shadow-lg">
+            <div class="space-y-5">
+              <div class="flex items-center justify-between px-1">
+                <div class="flex items-center gap-2.5">
+                  <div class="w-8 h-8 rounded-xl bg-white/10 grid place-items-center">
+                    <svg class="w-4 h-4 text-[#FDE047]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg>
+                  </div>
+                  <span class="font-bold text-sm">Productivier</span>
+                </div>
+                <span class="px-2 py-0.5 rounded-full bg-white/10 text-[10px] font-semibold text-emerald-300">Leader</span>
+              </div>
+
+              <button class="w-full py-2.5 px-3 rounded-2xl bg-[#FDE047] text-[#111827] text-xs font-bold flex items-center justify-center gap-1.5">
+                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/><path d="M12 8v8"/></svg>
+                Input Realisasi
+              </button>
+
+              <nav class="space-y-1 text-xs font-semibold">
+                <div class="flex items-center justify-between px-3 py-2.5 rounded-2xl bg-white/10 text-white">
+                  <span class="flex items-center gap-2.5">
+                    <svg class="w-4 h-4 text-[#FDE047]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+                    Beranda
+                  </span>
+                  <span class="w-1.5 h-1.5 rounded-full bg-[#FDE047]"></span>
+                </div>
+                <div class="flex items-center gap-2.5 px-3 py-2.5 rounded-2xl text-gray-400">
+                  <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                  Proyek Tim
+                </div>
+                <div class="flex items-center gap-2.5 px-3 py-2.5 rounded-2xl text-gray-400">
+                  <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/></svg>
+                  Laporan & WA
+                </div>
+                <div class="flex items-center gap-2.5 px-3 py-2.5 rounded-2xl text-gray-400">
+                  <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+                  Profil & Akun
+                </div>
+              </nav>
+            </div>
+
+            <div class="p-2.5 rounded-2xl bg-white/5 border border-white/10 flex items-center gap-2.5">
+              <div class="w-8 h-8 rounded-xl bg-[#FDE047] text-[#111827] font-bold text-xs grid place-items-center">FF</div>
+              <div class="min-w-0">
+                <div class="text-xs font-bold truncate">Fifa (Leader)</div>
+                <div class="text-[10px] text-gray-400 truncate">Management</div>
+              </div>
+            </div>
+          </aside>
+
+          <!-- MAIN WORKSPACE -->
+          <div class="lg:col-span-9 space-y-5">
+            <!-- Top Greeting + Mode Switcher + Team Avatars -->
+            <div class="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-black/5">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-full bg-[#111827] text-white font-bold text-xs grid place-items-center">FF</div>
+                <div>
+                  <h3 class="text-xl font-bold tracking-tight">Halo, Fifa!</h3>
+                  <p class="text-xs text-gray-500">Tugas & Realisasi Hari Ini</p>
+                </div>
+              </div>
+
+              <div class="flex items-center gap-3">
+                <!-- Avatar Stack Kerja Bareng -->
+                <div class="flex items-center gap-2 bg-white/80 px-3 py-1.5 rounded-full border border-black/5">
+                  <span class="text-[11px] font-medium text-gray-500">Tim Aktif:</span>
+                  <div class="flex -space-x-2">
+                    <span class="w-6 h-6 rounded-full bg-teal-600 text-white text-[10px] font-bold grid place-items-center ring-2 ring-white">A1</span>
+                    <span class="w-6 h-6 rounded-full bg-amber-500 text-white text-[10px] font-bold grid place-items-center ring-2 ring-white">A2</span>
+                    <span class="w-6 h-6 rounded-full bg-gray-900 text-white text-[10px] font-bold grid place-items-center ring-2 ring-white">+3</span>
+                  </div>
+                </div>
+
+                <!-- Mode Switcher Pill (Pribadi | Tim) -->
+                <div class="inline-flex bg-white p-1 rounded-full border border-black/5 shadow-xs">
+                  <button class="px-3.5 py-1 rounded-full text-xs font-semibold text-gray-500">Pribadi</button>
+                  <button class="px-3.5 py-1 rounded-full text-xs font-semibold bg-[#111827] text-white">Tim</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- 3-Column Content Grid -->
+            <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
+              <!-- Left Column: Project Selector + 85% Metric + Yellow Activity Card -->
+              <div class="md:col-span-4 space-y-4">
+                <div class="bg-white/90 rounded-2xl p-3 border border-black/5 flex items-center justify-between">
+                  <div>
+                    <div class="text-xs font-bold">Konten & Operasional</div>
+                    <div class="text-[11px] text-gray-500">PIC: Fifa · 8/100 Tugas</div>
+                  </div>
+                  <svg class="w-4 h-4 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+                </div>
+
+                <div class="px-1">
+                  <div class="text-6xl font-semibold tracking-tighter tabular-nums leading-none">85%</div>
+                  <div class="text-xs text-gray-500 mt-1.5 font-medium">Produktivitas Hari Ini</div>
+                </div>
+
+                <!-- Butter Yellow Card -->
+                <div class="bg-[#FDE047] rounded-3xl p-4 shadow-sm">
+                  <div class="flex items-center justify-between mb-3">
+                    <span class="text-xs font-bold text-[#111827]">Aktivitas Proyek</span>
+                    <span class="px-2.5 py-0.5 rounded-full bg-[#6366F1] text-white text-[10px] font-semibold">Statistik</span>
+                  </div>
+                  <div class="grid grid-cols-3 gap-2">
+                    <div>
+                      <div class="text-xl font-bold tabular-nums">12</div>
+                      <div class="text-[10px] text-gray-800">Laporan</div>
+                    </div>
+                    <div>
+                      <div class="text-xl font-bold tabular-nums">3</div>
+                      <div class="text-[10px] text-gray-800">Proyek</div>
+                    </div>
+                    <div>
+                      <div class="text-xl font-bold tabular-nums">2</div>
+                      <div class="text-[10px] text-gray-800">Belum</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Center Column: Stacked Realisasi / Task Cards -->
+              <div class="md:col-span-5 space-y-3">
+                <div class="bg-white rounded-3xl p-4 border border-black/5 shadow-xs space-y-3">
+                  <div class="flex items-center justify-between">
+                    <span class="font-bold text-sm">Produksi Reels Harian</span>
+                    <span class="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-bold">Tercapai</span>
+                  </div>
+                  <div class="grid grid-cols-3 gap-2 text-[11px]">
+                    <div><span class="text-gray-400 block">Target</span><strong>5 Video</strong></div>
+                    <div><span class="text-gray-400 block">Tim</span><strong>Kreatif</strong></div>
+                    <div><span class="text-gray-400 block">Capaian</span><strong>100%</strong></div>
+                  </div>
+                  <div class="flex items-center justify-between pt-2 border-t border-gray-100">
+                    <div class="flex -space-x-1.5">
+                      <span class="w-6 h-6 rounded-full bg-gray-900 text-white text-[9px] font-bold grid place-items-center ring-2 ring-white">A1</span>
+                      <span class="w-6 h-6 rounded-full bg-teal-600 text-white text-[9px] font-bold grid place-items-center ring-2 ring-white">A2</span>
+                    </div>
+                    <button class="px-3 py-1.5 rounded-full bg-[#111827] text-white text-[11px] font-semibold">Lihat Detail</button>
+                  </div>
+                </div>
+
+                <div class="bg-white rounded-3xl p-4 border border-black/5 shadow-xs space-y-3">
+                  <div class="flex items-center justify-between">
+                    <span class="font-bold text-sm">Audit Leads Meta Ads</span>
+                    <span class="px-2.5 py-0.5 rounded-full bg-red-100 text-red-700 text-[10px] font-bold">Prioritas</span>
+                  </div>
+                  <div class="grid grid-cols-3 gap-2 text-[11px]">
+                    <div><span class="text-gray-400 block">Target</span><strong>20 Leads</strong></div>
+                    <div><span class="text-gray-400 block">PIC</span><strong>Fifa</strong></div>
+                    <div><span class="text-gray-400 block">Status</span><strong>Belum Input</strong></div>
+                  </div>
+                  <div class="flex items-center justify-between pt-2 border-t border-gray-100">
+                    <span class="text-[11px] text-gray-500">Perlu update hari ini</span>
+                    <button class="px-3 py-1.5 rounded-full bg-[#111827] text-white text-[11px] font-semibold">+ Catat</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Right Column: Quick Requests / Leader Actions -->
+              <div class="md:col-span-3 space-y-3">
+                <div class="bg-white/85 rounded-3xl p-4 border border-black/5 space-y-3">
+                  <div class="flex items-center justify-between">
+                    <span class="text-xs font-bold">Aksi Cepat</span>
+                    <span class="text-[11px] font-semibold text-teal-700">+ Baru</span>
+                  </div>
+                  <div class="divide-y divide-gray-100 text-xs">
+                    <div class="py-2 flex items-center justify-between">
+                      <span>Copy Rekap WA</span>
+                      <svg class="w-3.5 h-3.5 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>
+                    </div>
+                    <div class="py-2 flex items-center justify-between">
+                      <span>Export CSV Excel</span>
+                      <svg class="w-3.5 h-3.5 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>
+                    </div>
+                    <div class="py-2 flex items-center justify-between">
+                      <span>Cek Belum Input</span>
+                      <svg class="w-3.5 h-3.5 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+  </div>
+</body>
+</html>
