@@ -1,13 +1,21 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
-  --background: #F5F1EB;
-  --foreground: #111827;
+  --background: #ECEEF3;
+  --foreground: #18181B;
+  --surface-card: #FFFFFF;
+  --surface-border: rgba(255, 255, 255, 0.9);
+  --primary: #18181B;
+  --accent-lime: #D2F27C;
+  --accent-purple: #DCD4FB;
+  --accent-slate: #CBD5E1;
 }
 
 html,
 body {
-  background: radial-gradient(circle at 85% 90%, #DFCBB5 0%, #EFE7DC 45%, #F7F4EF 100%);
+  background: radial-gradient(circle at 4% 96%, #D6DCF2 0%, #ECEEF3 45%, #F4F5F8 100%);
   background-attachment: fixed;
   color: var(--foreground);
   font-family: var(--font-sans), -apple-system, BlinkMacSystemFont, sans-serif;
@@ -17,4 +25,33 @@ body {
 
 .tabular-nums {
   font-variant-numeric: tabular-nums;
+}
+
+.intellecta-card {
+  background: #FFFFFF;
+  border-radius: 32px;
+  box-shadow: 0 10px 35px -5px rgba(24, 24, 27, 0.03), 0 0 0 1px rgba(255, 255, 255, 0.9);
+}
+
+.chat-bubble-tail {
+  border-radius: 24px 24px 24px 6px;
+}
+
+/* Custom subtle scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(24, 24, 27, 0.12);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(24, 24, 27, 0.25);
 }

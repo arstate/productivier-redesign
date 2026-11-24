@@ -1,3 +1,13 @@
+@[Project Brain State](readme-ai-agent/AGENTS.md)
+
+# Productivier — Workspace & Development Rules
+
+- **Framework**: Next.js 16 (App Router, Turbopack) + React 19 + Tailwind CSS v4 + motion/react + SQLite (`src/lib/db.ts`).
+- **Design System**: Intellecta Clean Slate (Stitch Design System).
+- **Architecture**: Modular component structure (`src/components/dashboard`, `src/components/layout`, `src/components/tabs`, `src/types`).
+- **Port**: Development default `3000`.
+- **Quality Gates**: Zero TypeScript error, zero horizontal overflow, full SQLite CRUD integrity.
+
 <!-- BEGIN:nextjs-agent-rules -->
 
 ## This is NOT the Next.js you know

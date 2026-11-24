@@ -5,7 +5,7 @@ import "./globals.css";
 const jakarta = Plus_Jakarta_Sans({
   variable: "--font-sans",
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
+  weight: ["400", "500", "600", "700", "800"],
 });
 
 const jetbrains = JetBrains_Mono({
@@ -15,8 +15,12 @@ const jetbrains = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Productivier — Sistem Realisasi & Proyek Tim",
-  description: "Pencatatan realisasi harian, progres proyek otomatis, dan monitoring tim.",
+  title: "Productivier — Smart Productivity & Team Dashboard",
+  description: "Executive productivity dashboard, daily task realizations, project progress, and team monitoring.",
+  icons: {
+    icon: "/logo.svg",
+    apple: "/logo.svg",
+  },
 };
 
 export default function RootLayout({
@@ -26,7 +30,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="id" className={`${jakarta.variable} ${jetbrains.variable}`}>
-      <body className="antialiased bg-[#FAF9F6] text-[#111827] selection:bg-[#0F766E]/15 selection:text-[#0F766E]">
+      <body className="antialiased bg-dashboard-gradient text-slate-900 selection:bg-[#D2F27C] selection:text-[#18181B] min-h-screen">
         {children}
       </body>
     </html>

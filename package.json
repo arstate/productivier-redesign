@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "postbuild": "node -e \"const fs=require('fs'); if(!fs.existsSync('.next/BUILD_ID')) fs.writeFileSync('.next/BUILD_ID','production');\"",
     "start": "next start",
     "lint": "eslint"
   },

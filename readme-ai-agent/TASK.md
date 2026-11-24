@@ -1,0 +1,64 @@
+# Task Tracker — Productivier Redesign
+
+- [x] Initial repo clone and Next.js 16 dependencies installation.
+- [x] Extraction & audit of Stitch Design System (`/home/arya/Downloads/stitch_design_system_redesign.zip`).
+- [x] Implementation of Intellecta Clean Slate design tokens (`globals.css`, `layout.tsx`).
+- [x] Modularization of monolithic `page.tsx` (2.628 lines) into clean modular components.
+- [x] Integration of 4-Card Bento Grid Dashboard (`VirtualAssistantCard`, `ActivityTimelineCard`, `TodoListCard`, `SummarySplineCard`).
+- [x] Full SQLite persistence & CRUD alignment for projects, realisasi, users, and monitoring.
+- [x] Zero-Gap AI Agent Full Control & Forensic Fixes (4 Screenshot Gaps Closed):
+  - [x] Gap 1: Nudge/Colek Tim (`nudge_user`) — otonom insert notifikasi reminder setor realisasi ke SQLite.
+  - [x] Gap 2: Kirim Pesan & Tag di Grup Chat (`send_chat_message`) — otonom kirim pesan & mention ke `chat_messages` + direct user notification.
+  - [x] Gap 3: Tambah Anggota ke Grup yang Ada (`add_group_member`) — otonom insert ke `chat_group_members` (default role 'member') + sistem notif & instant preflight for "di grup yg udah ada".
+  - [x] Gap 4: Keluarkan Anggota dari Grup (`remove_group_member`) — otonom delete dari `chat_group_members`.
+  - [x] Task Planning Engine (`plan_tasks`) — parsing daftar tugas kustom multi-baris (1. 2. 3. / bullet), tailored generation sesuai divisi & target count, lookup nama & divisi pengguna asli (anti-hardcoded 'Anggota Tim'), serta pembuatan notifikasi sprint & navigasi tab proyek otonom.
+  - [x] Zero-Refusal Architecture — eliminasi teks "🚫 Maaf Bestie, gw nggak bisa...", multi-tier routing (Preflight -> Tool Call -> Content Interceptor -> Fallback), Section 9 anti-refusal fallback loop hole fixed, dan sinkronisasi `uiAction` ke antarmuka pengguna realtime.
+- [x] Setup of complete `readme-ai-agent/` (12 files) + root `AGENTS.md`.
+- [x] TypeScript verification (`tsc --noEmit` exit code 0).
+- [x] Production build verification (`npm run build` exit code 0).
+- [x] End-to-end 7-scenario Live Verification Suite passed 100%.
+- [x] Forensic Bug & Mock Feature Eradication (Approved Roadmap 4-Phase Implementation):
+  - [x] Database: Created `personal_todos` table in `src/lib/db.ts` (`id`, `user_id`, `title`, `tag`, `time`, `done`, `created_at`).
+  - [x] Database: Added `phone` column to `users` table and dynamically populated team contact numbers.
+  - [x] REST API: Created `/api/todos` (GET, POST) and `/api/todos/[id]` (PATCH, DELETE) for personal to-do management.
+  - [x] REST API: Created `/api/projects/[id]` (GET, PATCH, DELETE) for project status transitions & deletions.
+  - [x] REST API: Created `/api/realisasi/[id]` (PATCH, DELETE) for report updates & corrections.
+  - [x] Frontend: Refactored `HomeTab.tsx` To-do widget — connected to SQLite, added inline input form (`+ Tambah to-do... [Enter]`), tag selector pills (`Desain`, `Konten`, `Ads`, `Dev`, `Umum`), optimistic checkbox toggling, and item deletion (`Trash2`).
+  - [x] Frontend: Connected "Kecepatan Sprint Divisi" in `HomeTab.tsx` to real aggregation of `realisasi` data by division.
+  - [x] Frontend: Fixed broken link in `QuickLaunchpadCard.tsx` from `/portal/${id}` (404) to `/client/project/${id}`.
+  - [x] Frontend: Fixed falsy sprint velocity bug `|| 68` in `QuickLaunchpadCard.tsx`.
+  - [x] Frontend: Refactored `PersonalFocusChart.tsx` — removed fake hardcoded 17-23 Nov mock dates and artificial `60 + idx*5` boost; implemented dynamic 7-day rolling window generator.
+  - [x] Frontend: Added `if (!res.ok)` response validation in `InputTab.tsx` to prevent silent submit errors.
+  - [x] Frontend: Added "Tandai Selesai" / "Buka Kembali" and "Hapus Proyek" buttons in `ProjectDetailView.tsx`.
+  - [x] Codebase: Cleaned up 8 orphaned dead components (`TodoListCard`, `ActivityTimelineCard`, `HeroGreeting`, `SummarySplineCard`, `VirtualAssistantCard`, `NavigationSidebar`, `TopHeader`, `ProjectDetailModal`).
+  - [x] Final Validation: Full TypeScript check (`tsc --noEmit`) and Turbopack production build (`npm run build`) passed with 0 errors. Server restarted on port 3007.
+- [x] 3-Pillar Security Hardening & UI Feature Integration Plan (/boost):
+  - [x] Pillar 1 (Security & Auth): Isolate OpenRouter API key to `.env.local` + fallback in `chat/route.ts` & `messages/route.ts`.
+  - [x] Pillar 1 (Security & Auth): Native `node:crypto` `scryptSync` password hashing with transparent auto-upgrade on login (`src/lib/db.ts`, `src/app/api/login/route.ts`).
+  - [x] Pillar 1 (Security & Auth): Access control guards on `src/app/api/users/[id]/route.ts` (role check, protect 'fifa', auth verification) and `src/app/api/notes/[id]/route.ts` (non-owner/non-admin write protection).
+  - [x] Pillar 2 (Disconnected UI): "Edit Jadwal" modal and controls in `CalendarTab.tsx` connected to `PUT /api/calendar/[id]`.
+  - [x] Pillar 2 (Disconnected UI): Realisasi report Edit modal and Delete buttons in `ReportsTab.tsx` connected to `PATCH /api/realisasi/[id]` and `DELETE /api/realisasi/[id]`.
+  - [x] Pillar 2 (Disconnected UI): WhatsApp phone number (`phone`) and gender (`female`/`male`) selector in `ProfileTab.tsx` connected to `PUT /api/users/[id]`.
+  - [x] Pillar 3 (Realtime Polling & Optimization): 4-second background silent polling in `ChatTab.tsx` (`loadMessagesSilently`) for real-time messages & AI responses.
+  - [x] Pillar 3 (Realtime Polling & Optimization): `LIMIT 100` query clamp on `src/app/api/chat/messages/route.ts`.
+  - [x] Pillar 4 (Verification & Stability): Zero TS errors, Turbopack production build passed, Next.js restarted on port 3007, automated E2E test suite passed 10/10 scenarios.
+- [x] Instant Zero-Animation Chat Scroll & Mascot Branding Integration (/boost):
+  - [x] In `src/components/tabs/ChatTab.tsx`: Implemented synchronous pre-paint scroll to bottom (`useLayoutEffect` + `chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight` with `scrollBehavior = "auto"`), eliminating any smooth animation or scroll lag when switching or opening groups.
+  - [x] In `src/components/ai/FloatingAIAgent.tsx`: Integrated immediate `useLayoutEffect` and `useEffect` on `isOpen` transition, positioning messages directly at the bottom with zero scroll animation lag.
+  - [x] Deployed `<AIMascot />` with strict 1:1 aspect ratio (`aspectRatio: "1 / 1"`, `objectFit: "contain"`, `select-none`, `drop-shadow-xs`) preventing any squishing or warping:
+    - [x] `ChatTab.tsx`: AI message sender badge, AI typing indicator, and group headers.
+    - [x] `FloatingAIAgent.tsx`: Floating orb trigger button, header avatar, AI message headers, and thinking indicator.
+    - [x] `GroupInfoModal.tsx`: AI Assistant settings card header and dedicated AI Co-Worker member card.
+    - [x] `QuickLaunchpadCard.tsx`: Universal Floating AI launchpad tile.
+  - [x] Group Chat Anti-Refusal & Autonomous Execution (`src/app/api/chat/messages/route.ts`):
+    - [x] Added Zero-Tolerance Anti-Refusal system instructions to group chat model prompt.
+    - [x] Integrated autonomous execution for colek/nudge (writing directly to `notifications`) and adding group members (inserting into `chat_group_members`).
+    - [x] Installed server-side anti-refusal interceptor regex preventing any Indonesian refusal phrase from ever reaching the group chat feed.
+- [x] Multi-Project Connector di Chat Group, Autocomplete Dropup Slash Tag `/project`, & Integrasi Review/Kendala Tim:
+  - [x] Database: Ditambahkan tabel `chat_group_projects (id, group_id, project_id, created_at, UNIQUE(group_id, project_id))` di `src/lib/db.ts` dengan migrasi otomatis dari data legacy `chat_groups.project_id`.
+  - [x] REST API: Dibuat endpoint `GET /api/chat/groups/[id]/projects`, `POST /api/chat/groups/[id]/projects`, dan `DELETE /api/chat/groups/[id]/projects?project_id=...` untuk manajemen multi-project connector.
+  - [x] Frontend: Di `src/components/chat/GroupInfoModal.tsx`, diimplementasikan modul interaktif "Konektor Proyek Tim" yang menampilkan daftar proyek terhubung, persentase progres, target vs realisasi, status kendala aktif, opsi hapus koneksi, serta dropdown untuk menambah proyek baru ke grup.
+  - [x] Frontend: Di `src/components/tabs/ChatTab.tsx`, diimplementasikan interactive autocomplete dropup menu saat pengguna mengetik `/project` atau `/pro`, memprioritaskan proyek yang terkoneksi ke grup, mendukung filter instan, navigasi keyboard panah atas/bawah, enter/tab untuk auto-fill `/project "[Nama Proyek]" `, dan escape untuk menutup.
+  - [x] Frontend: Di `src/components/dashboard/HomeTab.tsx`, kartu "Review & Kendala Tim" diintegrasikan dengan badge proyek dan tombol aksi langsung "Bahas di Chat" serta "Tanya Miu AI" yang otomatis membuka `ChatTab` dengan pesan draft yang terstruktur rapi.
+  - [x] AI Assistant (Miu): Di `src/app/api/chat/messages/route.ts` & `src/app/api/ai/chat/route.ts`, AI Miu membaca seluruh proyek yang terhubung ke grup chat, dan saat dipanggil dengan tag `/project [Nama Proyek]`, Miu mengekstrak dossier lengkap proyek tersebut (target, realisasi, persentase, deadline, kendala tim) dan memberikan analisis solutif secara mendalam.
+  - [x] Verifikasi: `npx tsc --noEmit` lolos 0 error, `npm run build` sukses 100%, Next.js server berjalan di port 3007 dengan HTTP 200, dan seluruh endpoint REST telah diuji via curl.

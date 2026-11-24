@@ -15,9 +15,14 @@ export async function GET() {
   const projects = rows.map((p) => {
     const target = Number(p.target_total) || 0;
     const total = Number(p.total_realisasi) || 0;
+    const links = db
+      .prepare('SELECT id, project_id, title, url, platform, created_at FROM project_links WHERE project_id = ? ORDER BY id ASC')
+      .all(Number(p.id)) as Array<Record<string, unknown>>;
+
     return {
       ...p,
       persentase: target > 0 ? Math.min(100, Math.round((total / target) * 100)) : 0,
+      links,
     };
   });
 

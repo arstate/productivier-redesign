@@ -4,99 +4,56 @@ import React, { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Home,
-  FolderKanban,
-  PlusCircle,
+  LayoutGrid,
+  Calendar,
+  StickyNote,
+  Zap,
   FileText,
   User,
   LogOut,
-  BarChart3,
-  Copy,
-  Download,
-  Trash2,
-  CheckCircle2,
-  Clock,
-  ExternalLink,
   Search,
   ChevronRight,
-  Bell,
-  Pencil,
-  Play,
-  Users,
+  Sparkles,
+  X,
+  PanelLeft,
+  PanelLeftClose,
+  Moon,
+  Sun,
 } from "lucide-react";
 
-type UserType = {
-  id: number;
-  username: string;
-  nama: string;
-  divisi: string;
-  role: "admin" | "karyawan";
-  avatar_url?: string;
-};
-
-type ProjectType = {
-  id: number;
-  nama_proyek: string;
-  pic_id: number | null;
-  pic_nama: string | null;
-  divisi: string;
-  target_total: number;
-  total_realisasi: number;
-  jumlah_laporan: number;
-  satuan: string;
-  status: string;
-  persentase: number;
-};
-
-type RealisasiType = {
-  id: number;
-  project_id: number | null;
-  nama_proyek: string | null;
-  user_id: number;
-  nama: string;
-  divisi: string;
-  tanggal: string;
-  aktivitas: string;
-  target: number;
-  realisasi: number;
-  satuan: string;
-  persentase: number;
-  status: string;
-  kendala?: string;
-  solusi?: string;
-  bukti_foto_url?: string;
-};
-
-type MonitoringType = {
-  today: string;
-  statusTim: Array<{
-    id: number;
-    nama: string;
-    divisi: string;
-    sudah_input: boolean;
-    jumlah_input: number;
-    rata_persen: number;
-  }>;
-  tren7Hari: Array<{
-    tanggal: string;
-    jumlah_laporan: number;
-    rata_persen: number;
-  }>;
-};
+import HomeTab from "@/components/dashboard/HomeTab";
+import ProjectsTab from "@/components/tabs/ProjectsTab";
+import CalendarTab from "@/components/tabs/CalendarTab";
+import NotesTab from "@/components/tabs/NotesTab";
+import InputTab from "@/components/tabs/InputTab";
+import ReportsTab from "@/components/tabs/ReportsTab";
+import ProfileTab from "@/components/tabs/ProfileTab";
+import ChatTab from "@/components/tabs/ChatTab";
+import FloatingAIAgent from "@/components/ai/FloatingAIAgent";
+import NotificationDropdown from "@/components/notifications/NotificationDropdown";
+import CustomSelect, { CustomSelectOption } from "@/components/ui/CustomSelect";
+import ProductivierLogo from "@/components/ui/ProductivierLogo";
+import { UserType, ProjectType, RealisasiType, MonitoringType, TabType, ViewModeType } from "@/types";
+import { MessageSquare } from "lucide-react";
 
 const NAV_ITEMS = [
   { id: "home", label: "Dashboard", Icon: Home },
-  { id: "projects", label: "Proyek", Icon: FolderKanban },
-  { id: "input", label: "Input", Icon: PlusCircle },
+  { id: "projects", label: "Proyek", Icon: LayoutGrid },
+  { id: "calendar", label: "Kalender", Icon: Calendar },
+  { id: "notes", label: "Notes", Icon: StickyNote },
+  { id: "chat", label: "Chat Tim", Icon: MessageSquare },
+  { id: "input", label: "Input", Icon: Zap },
   { id: "reports", label: "Laporan", Icon: FileText },
-  { id: "profile", label: "Profil", Icon: User },
+  { id: "profile", label: "Profil & Tim", Icon: User },
 ] as const;
 
-const SPRING = { type: "spring" as const, stiffness: 380, damping: 32 };
+const SPRING = { type: "spring" as const, stiffness: 420, damping: 32 };
 
 export default function ProductivierApp() {
   const [user, setUser] = useState<UserType | null>(null);
-  const [tab, setTab] = useState<"home" | "projects" | "input" | "reports" | "profile">("home");
-  const [viewMode, setViewMode] = useState<"pribadi" | "tim">("tim");
+  const [tab, setTab] = useState<TabType>("home");
+  const [viewMode, setViewMode] = useState<ViewModeType>("tim");
+  const [isDarkMode, setIsDarkMode] = useState(false);
   const [projects, setProjects] = useState<ProjectType[]>([]);
   const [realisasi, setRealisasi] = useState<RealisasiType[]>([]);
   const [users, setUsers] = useState<UserType[]>([]);
@@ -105,6 +62,24 @@ export default function ProductivierApp() {
   const [loginErr, setLoginErr] = useState("");
   const [uName, setUName] = useState("");
   const [uPass, setUPass] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedProjectId, setSelectedProjectId] = useState<string>("all");
+  const [initialized, setInitialized] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("sidebar") === "open") {
+        setSidebarOpen(true);
+      }
+      const requestedTab = params.get("tab") as TabType;
+      if (requestedTab && ["home", "projects", "calendar", "notes", "chat", "input", "reports", "profile"].includes(requestedTab)) {
+        setTab(requestedTab);
+      }
+    }
+  }, []);
 
   const showToast = (msg: string) => {
     setToast(msg);
@@ -112,1186 +87,864 @@ export default function ProductivierApp() {
   };
 
   const loadAll = async (activeUser: UserType) => {
-    const [pRes, rRes] = await Promise.all([
-      fetch("/api/projects").then((r) => r.json()),
-      fetch(`/api/realisasi?user_id=${activeUser.id}&role=${activeUser.role}`).then((r) => r.json()),
-    ]);
-    setProjects(pRes.projects || []);
-    setRealisasi(rRes.realisasi || []);
-
-    if (activeUser.role === "admin") {
-      const [uRes, mRes] = await Promise.all([
-        fetch("/api/users").then((r) => r.json()),
-        fetch("/api/monitoring").then((r) => r.json()),
+    try {
+      const [pRes, rRes] = await Promise.all([
+        fetch("/api/projects").then((r) => r.json()),
+        fetch(`/api/realisasi?user_id=${activeUser.id}&role=${activeUser.role}`).then((r) => r.json()),
       ]);
-      setUsers(uRes.users || []);
-      setMonitoring(mRes);
+      setProjects(pRes.projects || []);
+      setRealisasi(rRes.realisasi || []);
+
+      if (activeUser.role === "admin") {
+        const [uRes, mRes] = await Promise.all([
+          fetch("/api/users").then((r) => r.json()),
+          fetch("/api/monitoring").then((r) => r.json()),
+        ]);
+        setUsers(uRes.users || []);
+        setMonitoring(mRes);
+      }
+    } catch (e) {
+      console.error("Gagal memuat data", e);
     }
   };
 
   useEffect(() => {
     const saved = localStorage.getItem("prod_next_user");
     if (saved) {
-      const parsed = JSON.parse(saved) as UserType;
-      Promise.resolve().then(() => {
+      try {
+        const parsed = JSON.parse(saved) as UserType;
         setUser(parsed);
         loadAll(parsed);
-      });
+      } catch {
+        localStorage.removeItem("prod_next_user");
+      }
+    } else {
+      // Default demo login for seamless testing
+      const defaultUser: UserType = {
+        id: 1,
+        username: "fifa",
+        nama: "Fifa (Leader)",
+        divisi: "Operasional & Konten",
+        role: "admin",
+      };
+      setUser(defaultUser);
+      localStorage.setItem("prod_next_user", JSON.stringify(defaultUser));
+      loadAll(defaultUser);
     }
+    setInitialized(true);
   }, []);
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoginErr("");
-    const res = await fetch("/api/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username: uName, password: uPass }),
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      setLoginErr(data.error || "Username atau password salah");
-      return;
+  useEffect(() => {
+    if (isDarkMode) {
+      document.documentElement.classList.add("dark");
+    } else {
+      document.documentElement.classList.remove("dark");
     }
-    setUser(data.user);
-    localStorage.setItem("prod_next_user", JSON.stringify(data.user));
-    loadAll(data.user);
+  }, [isDarkMode]);
+
+  useEffect(() => {
+    const handleRefresh = () => {
+      if (user) {
+        loadAll(user);
+      }
+    };
+    window.addEventListener("productivier:refresh_data", handleRefresh);
+    return () => {
+      window.removeEventListener("productivier:refresh_data", handleRefresh);
+    };
+  }, [user]);
+
+  const handleLogin = async (e?: React.FormEvent, customUser?: { u: string; p: string }) => {
+    if (e) e.preventDefault();
+    setLoginErr("");
+    const loginUser = customUser ? customUser.u : uName;
+    const loginPass = customUser ? customUser.p : uPass;
+
+    try {
+      const res = await fetch("/api/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: loginUser, password: loginPass }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setLoginErr(data.error || "Username atau password salah");
+        return;
+      }
+      setUser(data.user);
+      localStorage.setItem("prod_next_user", JSON.stringify(data.user));
+      loadAll(data.user);
+      showToast(`Selamat datang, ${data.user.nama}`);
+    } catch {
+      setLoginErr("Gagal menghubungi server");
+    }
   };
 
   const handleLogout = () => {
     localStorage.removeItem("prod_next_user");
     setUser(null);
     setTab("home");
+    showToast("Anda telah keluar akun");
   };
+
+  const filteredSearchResults = useMemo(() => {
+    if (!searchQuery.trim()) return { projects: [], tasks: [] };
+    const q = searchQuery.toLowerCase();
+    const p = projects.filter(
+      (item) => item.nama_proyek.toLowerCase().includes(q) || item.divisi.toLowerCase().includes(q)
+    );
+    const t = realisasi.filter(
+      (item) =>
+        item.aktivitas.toLowerCase().includes(q) ||
+        (item.nama_proyek && item.nama_proyek.toLowerCase().includes(q)) ||
+        item.nama.toLowerCase().includes(q)
+    );
+    return { projects: p.slice(0, 4), tasks: t.slice(0, 5) };
+  }, [searchQuery, projects, realisasi]);
+
+  const projectFilterOptions: CustomSelectOption[] = [
+    { value: "all", label: `Semua Proyek (${projects.length})` },
+    ...projects.map((p) => ({
+      value: String(p.id),
+      label: p.nama_proyek,
+      subLabel: `${p.divisi} · ${p.persentase}%`,
+    })),
+  ];
+
+  if (!initialized) {
+    return (
+      <div className="min-h-screen bg-dashboard-gradient flex items-center justify-center p-4">
+        <div className="w-10 h-10 rounded-full border-2 border-slate-900 border-t-transparent animate-spin" />
+      </div>
+    );
+  }
 
   if (!user) {
     return (
-      <div className="min-h-dvh flex items-center justify-center p-5">
+      <div className="min-h-screen bg-dashboard-gradient flex items-center justify-center p-4 sm:p-6 select-none antialiased">
         <motion.div
           initial={{ opacity: 0, y: 16, scale: 0.98 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           transition={SPRING}
-          className="w-full max-w-sm bg-white/95 backdrop-blur-md border border-black/5 rounded-3xl p-7 shadow-[0_20px_50px_rgb(0,0,0,0.06)]"
+          className="w-full max-w-md intellecta-card p-8 sm:p-10 dark:text-slate-100"
         >
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-10 h-10 rounded-2xl bg-[#111827] text-[#FDE047] grid place-items-center shadow-xs">
-              <BarChart3 className="w-5 h-5" />
-            </div>
+          {/* Custom SVG Logo & Header */}
+          <div className="flex items-center gap-3.5 mb-8">
+            <ProductivierLogo size={44} />
             <div>
-              <span className="font-bold text-lg tracking-tight block leading-none">Productivier</span>
-              <span className="text-[11px] font-medium text-[#6B7280] tracking-wider uppercase">Workspace Tim</span>
+              <span className="font-extrabold text-xl tracking-tight block text-slate-900 dark:text-white leading-tight">
+                Productivier
+              </span>
+              <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 tracking-wider uppercase">
+                Team Workspace
+              </span>
             </div>
           </div>
-          <h1 className="text-2xl font-bold tracking-tight mb-1">Masuk Akun</h1>
-          <p className="text-sm text-[#6B7280] mb-6">Catat realisasi harian & pantau progres proyek dalam satu tempat.</p>
-          <form onSubmit={handleLogin} className="space-y-4">
+
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white mb-2">
+            Masuk Akun
+          </h1>
+          <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mb-8 font-medium">
+            Kelola produktivitas harian, kalender agenda, memo to-do, dan asisten AI.
+          </p>
+
+          <form onSubmit={(e) => handleLogin(e)} className="space-y-4">
             <div>
-              <label className="block text-xs font-semibold text-[#4B5563] mb-1.5">Username</label>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2">
+                Username
+              </label>
               <input
                 type="text"
                 required
                 value={uName}
                 onChange={(e) => setUName(e.target.value)}
-                placeholder="Masukkan username"
-                className="w-full px-3.5 py-2.5 rounded-xl border border-black/10 bg-[#FAF9F6] text-base sm:text-sm focus:bg-white focus:outline-none focus:border-[#111827] transition"
+                placeholder="fifa / tim1 / tim2"
+                className="w-full px-4 py-3 rounded-2xl bg-slate-100/90 dark:bg-slate-800/90 border border-slate-200/70 dark:border-slate-700 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/10 transition"
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-[#4B5563] mb-1.5">Password</label>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2">
+                Password
+              </label>
               <input
                 type="password"
                 required
                 value={uPass}
                 onChange={(e) => setUPass(e.target.value)}
-                placeholder="Masukkan password"
-                className="w-full px-3.5 py-2.5 rounded-xl border border-black/10 bg-[#FAF9F6] text-base sm:text-sm focus:bg-white focus:outline-none focus:border-[#111827] transition"
+                placeholder="cewekalay / tim123"
+                className="w-full px-4 py-3 rounded-2xl bg-slate-100/90 dark:bg-slate-800/90 border border-slate-200/70 dark:border-slate-700 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/10 transition"
               />
             </div>
+
             {loginErr && (
-              <div className="px-3 py-2 rounded-xl bg-[#FEE2E2] text-[#B91C1C] text-xs font-medium">
+              <div className="px-4 py-2.5 rounded-xl bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 text-xs font-semibold border border-red-200/80 dark:border-red-800">
                 {loginErr}
               </div>
             )}
+
             <button
               type="submit"
-              className="w-full min-h-[46px] rounded-xl bg-[#111827] text-white font-semibold text-sm hover:bg-[#1F2937] active:scale-[0.98] transition"
+              className="w-full min-h-[48px] rounded-full bg-[#1C1D21] hover:bg-black text-white font-semibold text-sm shadow-lg shadow-black/10 active:scale-[0.98] transition mt-2 flex items-center justify-center gap-2 cursor-pointer"
             >
-              Masuk ke Dashboard
+              <span>Masuk ke Dashboard</span>
+              <ChevronRight className="w-4 h-4" />
             </button>
           </form>
+
+          {/* Quick Demo Access Buttons */}
+          <div className="mt-6 pt-5 border-t border-slate-200/60 dark:border-slate-700/60 text-center">
+            <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block mb-2.5">
+              Akses Cepat (Demo):
+            </span>
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <button
+                type="button"
+                onClick={() => handleLogin(undefined, { u: "fifa", p: "cewekalay" })}
+                className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-semibold transition cursor-pointer"
+              >
+                Fifa (Admin)
+              </button>
+              <button
+                type="button"
+                onClick={() => handleLogin(undefined, { u: "tim1", p: "tim123" })}
+                className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-semibold transition cursor-pointer"
+              >
+                Tim 1 (Karyawan)
+              </button>
+            </div>
+          </div>
         </motion.div>
       </div>
     );
   }
 
-  const activeProjects = projects.filter((p) => p.status === "aktif").length;
+  const activeProjectsCount = projects.filter((p) => p.status === "aktif").length;
+  const visibleRealisasi = realisasi.filter((r) => {
+    const matchUser = viewMode === "pribadi" ? r.user_id === user.id : true;
+    const matchProject = selectedProjectId === "all" ? true : String(r.project_id) === selectedProjectId;
+    return matchUser && matchProject;
+  });
+
+  const totalTasksDone = visibleRealisasi.length;
+  const completionPercentage = visibleRealisasi.length
+    ? Math.round(visibleRealisasi.reduce((a, b) => a + b.persentase, 0) / visibleRealisasi.length)
+    : 0;
 
   return (
-    <div className="min-h-dvh pb-24 md:pb-10">
+    <div className="min-h-screen bg-radial from-[#D6DCF2] via-[#ECEEF3] to-[#F4F5F8] text-[#18181B] flex flex-col select-none antialiased">
+      {/* GLOBAL TOAST */}
       <AnimatePresence>
         {toast && (
           <motion.div
-            initial={{ opacity: 0, y: -12, scale: 0.95 }}
+            initial={{ opacity: 0, y: -16, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -12, scale: 0.95 }}
-            className="fixed top-5 right-5 z-50 bg-[#111827] text-white text-xs font-semibold px-4 py-2.5 rounded-full shadow-lg"
+            exit={{ opacity: 0, y: -16, scale: 0.95 }}
+            className="fixed top-6 right-6 z-50 bg-[#1C1D21] text-white text-xs font-semibold px-5 py-3 rounded-full shadow-xl flex items-center gap-2 border border-white/10"
           >
-            {toast}
+            <Sparkles className="w-3.5 h-3.5 text-[#D2F27C]" />
+            <span>{toast}</span>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* DESKTOP TOP NAVBAR (Exact Lisso Style) */}
-      <header className="sticky top-0 z-30 bg-white/85 backdrop-blur-md border-b border-black/5">
-        <div className="max-w-6xl mx-auto px-4 md:px-8 h-16 flex items-center justify-between gap-4">
-          {/* Left: Brand */}
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-full bg-[#111827] text-white grid place-items-center">
-              <BarChart3 className="w-4 h-4" />
+      {/* SEARCH MODAL */}
+      <AnimatePresence>
+        {searchOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-start justify-center pt-20 px-4"
+            onClick={() => setSearchOpen(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.96, y: -10 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.96, y: -10 }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-lg intellecta-card p-6 shadow-2xl dark:text-slate-100"
+            >
+              <div className="flex items-center gap-3 border-b border-slate-200/80 dark:border-slate-700/80 pb-4">
+                <Search className="w-5 h-5 text-slate-400" />
+                <input
+                  type="text"
+                  autoFocus
+                  placeholder="Cari proyek, aktivitas harian, atau anggota tim..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full bg-transparent text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none"
+                />
+                <button
+                  onClick={() => setSearchOpen(false)}
+                  className="w-8 h-8 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center text-slate-400 cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="mt-4 max-h-80 overflow-y-auto space-y-4">
+                {filteredSearchResults.projects.length > 0 && (
+                  <div>
+                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-2">
+                      Proyek
+                    </span>
+                    <div className="space-y-1.5">
+                      {filteredSearchResults.projects.map((p) => (
+                        <div
+                          key={p.id}
+                          onClick={() => {
+                            setTab("projects");
+                            setSearchOpen(false);
+                          }}
+                          className="p-2.5 rounded-2xl hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-between cursor-pointer transition"
+                        >
+                          <div>
+                            <span className="text-xs font-bold text-slate-900 dark:text-white block">
+                              {p.nama_proyek}
+                            </span>
+                            <span className="text-[11px] text-slate-500 dark:text-slate-400">{p.divisi}</span>
+                          </div>
+                          <span className="text-xs font-bold text-slate-800 dark:text-slate-200 tabular-nums">
+                            {p.persentase}%
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {filteredSearchResults.tasks.length > 0 && (
+                  <div>
+                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-2">
+                      Aktivitas Realisasi
+                    </span>
+                    <div className="space-y-1.5">
+                      {filteredSearchResults.tasks.map((t) => (
+                        <div
+                          key={t.id}
+                          onClick={() => {
+                            setTab("reports");
+                            setSearchOpen(false);
+                          }}
+                          className="p-2.5 rounded-2xl hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-between cursor-pointer transition"
+                        >
+                          <div>
+                            <span className="text-xs font-semibold text-slate-900 dark:text-white block">
+                              {t.aktivitas}
+                            </span>
+                            <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                              {t.nama} · {t.tanggal}
+                            </span>
+                          </div>
+                          <span className="text-xs font-bold text-slate-800 dark:text-slate-200 tabular-nums">
+                            {t.persentase}%
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {searchQuery.trim() &&
+                  filteredSearchResults.projects.length === 0 &&
+                  filteredSearchResults.tasks.length === 0 && (
+                    <div className="py-8 text-center text-xs text-slate-500">
+                      Tidak ada hasil yang sesuai dengan kata kunci pencarian.
+                    </div>
+                  )}
+
+                {!searchQuery.trim() && (
+                  <div className="py-6 text-center text-xs text-slate-400">
+                    Ketik kata kunci untuk mencari cepat proyek dan tugas.
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* TOP FIXED NAVBAR (Fixed at absolute top 0, zero scroll gap) */}
+      <header
+        className="fixed top-0 inset-x-0 z-40 bg-[#ECEEF3]/95 dark:bg-[#121316]/95 backdrop-blur-xl border-b border-black/[0.06] dark:border-white/[0.08] transition-colors shadow-[0_2px_16px_rgba(0,0,0,0.03)]"
+        data-purpose="top-header"
+      >
+        <div className="w-full max-w-[1600px] mx-auto px-4 sm:px-8 lg:px-12 xl:px-14 py-3 sm:py-3.5 flex items-center justify-between gap-4">
+          {/* Left: Morning Greeting (Clean Minimal - No Duplicate Logo) */}
+          <div className="flex items-center gap-3 sm:gap-4 min-w-0 pr-2">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <h1 className="text-lg sm:text-xl md:text-2xl font-black text-slate-900 dark:text-white tracking-tight leading-tight truncate">
+                  Good morning, {user.nama.split(" ")[0]}!
+                </h1>
+              </div>
+              <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 font-medium truncate mt-0.5">
+                {viewMode === "tim"
+                  ? `Monitoring ${activeProjectsCount} proyek aktif & progres tim ${user.divisi}.`
+                  : "Let's make this day productive."}
+              </p>
             </div>
-            <span className="font-bold text-base tracking-tight">Productivier</span>
           </div>
 
-          {/* Center: Horizontal Navigation Links (Desktop) */}
-          <nav className="hidden md:flex items-center gap-1">
-            {NAV_ITEMS.map(({ id, label }) => {
-              const active = tab === id;
-              return (
-                <button
-                  key={id}
-                  onClick={() => setTab(id)}
-                  className={`relative px-4 py-1.5 rounded-full text-xs font-semibold transition-colors ${
-                    active ? "text-[#111827]" : "text-[#6B7280] hover:text-[#111827]"
-                  }`}
-                >
-                  {active && (
-                    <motion.span
-                      layoutId="top-nav-pill"
-                      transition={SPRING}
-                      className="absolute inset-0 bg-[#F3EFE8] rounded-full"
-                    />
-                  )}
-                  <span className="relative z-10">{label}</span>
-                </button>
-              );
-            })}
-          </nav>
-
-          {/* Right: Mode Switcher (Pribadi | Tim) + Bell/Logout */}
-          <div className="flex items-center gap-2.5">
-            <div className="inline-flex bg-[#F3EFE8] p-1 rounded-full">
-              {(["pribadi", "tim"] as const).map((m) => {
-                const isAct = viewMode === m;
-                return (
-                  <button
-                    key={m}
-                    onClick={() => setViewMode(m)}
-                    className={`relative px-3.5 py-1 rounded-full text-xs font-semibold transition-colors ${
-                      isAct ? "text-white" : "text-[#6B7280] hover:text-[#111827]"
-                    }`}
-                  >
-                    {isAct && (
-                      <motion.span
-                        layoutId="mode-switcher-pill"
-                        transition={SPRING}
-                        className="absolute inset-0 bg-[#111827] rounded-full"
-                      />
-                    )}
-                    <span className="relative z-10 capitalize">{m}</span>
-                  </button>
-                );
-              })}
+          {/* Center-Right Controls */}
+          <div className="flex items-center gap-2.5 sm:gap-4 shrink-0">
+            {/* View Mode Toggle: Pribadi vs Tim */}
+            <div className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-md rounded-full p-1 flex items-center gap-1 shadow-xs border border-white/60 dark:border-white/10">
+              <button
+                onClick={() => {
+                  setViewMode("tim");
+                  showToast("Mode Tampilan: Tim");
+                }}
+                className={`px-3 py-1 text-xs font-semibold rounded-full transition cursor-pointer ${
+                  viewMode === "tim"
+                    ? "bg-[#1C1D21] text-white shadow-xs dark:bg-white dark:text-slate-900"
+                    : "text-slate-600 dark:text-slate-300 hover:text-slate-900"
+                }`}
+              >
+                Tim
+              </button>
+              <button
+                onClick={() => {
+                  setViewMode("pribadi");
+                  showToast("Mode Tampilan: Pribadi");
+                }}
+                className={`px-3 py-1 text-xs font-semibold rounded-full transition cursor-pointer ${
+                  viewMode === "pribadi"
+                    ? "bg-[#1C1D21] text-white shadow-xs dark:bg-white dark:text-slate-900"
+                    : "text-slate-600 dark:text-slate-300 hover:text-slate-900"
+                }`}
+              >
+                Pribadi
+              </button>
             </div>
 
+            {/* Light / Dark Theme Switcher */}
+            <div className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-md rounded-full px-2.5 py-1.5 flex items-center gap-1.5 shadow-xs border border-white/60 dark:border-white/10">
+              <button
+                onClick={() => setIsDarkMode(true)}
+                className={`p-1 rounded-full transition cursor-pointer ${
+                  isDarkMode
+                    ? "bg-slate-900 dark:bg-white text-white dark:text-slate-900"
+                    : "text-slate-400 hover:text-slate-700"
+                }`}
+                title="Dark Mode"
+              >
+                <Moon className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setIsDarkMode(false)}
+                className={`w-6 h-6 rounded-full flex items-center justify-center transition cursor-pointer ${
+                  !isDarkMode
+                    ? "bg-white text-slate-800 shadow-xs"
+                    : "text-slate-400 hover:text-slate-200"
+                }`}
+                title="Light Mode"
+              >
+                <Sun className="w-3.5 h-3.5 stroke-[2.2]" />
+              </button>
+            </div>
+
+            {/* Global Search Button */}
             <button
-              onClick={handleLogout}
-              title="Keluar"
-              className="w-9 h-9 rounded-full bg-[#111827] text-white grid place-items-center hover:opacity-90 transition"
+              onClick={() => setSearchOpen(true)}
+              className="w-10 h-10 rounded-full bg-white/70 hover:bg-white dark:bg-slate-800/70 dark:hover:bg-slate-700 flex items-center justify-center text-slate-700 dark:text-slate-200 shadow-xs border border-white/60 dark:border-white/10 transition cursor-pointer"
+              title="Pencarian Cepat"
             >
-              <Bell className="w-4 h-4" />
+              <Search className="w-4 h-4" />
             </button>
+
+            {/* Notification Center */}
+            <NotificationDropdown
+              user={user}
+              showToast={showToast}
+              onRefreshData={() => loadAll(user)}
+              onNavigateTab={(targetTab) => {
+                setTab(targetTab as TabType);
+              }}
+            />
+
+            {/* User Profile Avatar */}
+            <div
+              onClick={() => setTab("profile")}
+              className="relative cursor-pointer group"
+              title={`${user.nama} (${user.role})`}
+            >
+              <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-[#D2F27C] via-amber-200 to-[#DCD4FB] ring-2 ring-white/80 dark:ring-slate-700 flex items-center justify-center font-bold text-xs text-slate-900 shadow-xs">
+                {user.nama.slice(0, 2).toUpperCase()}
+              </div>
+            </div>
           </div>
         </div>
       </header>
 
-      {/* MAIN WORKSPACE */}
-      <main className="max-w-6xl mx-auto px-4 md:px-8 pt-6">
-        {/* Sub-Header Greeting Row (Exact Lisso Style) */}
-        <div className="flex flex-wrap items-center justify-between gap-4 pb-5 mb-6 border-b border-black/5">
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-full bg-[#111827] text-[#FDE047] font-bold text-sm grid place-items-center shadow-xs">
-              {user.nama.slice(0, 2).toUpperCase()}
-            </div>
-            <h1 className="text-2xl md:text-3xl font-semibold tracking-tight">
-              Halo, {user.nama.split(" ")[0]}!
-            </h1>
-          </div>
-
-          <div className="hidden md:block text-sm font-medium text-[#111827]">
-            {tab === "home" ? "Tugas & Realisasi Hari Ini" : NAV_ITEMS.find((n) => n.id === tab)?.label}
-          </div>
-
-          {/* Team Avatar Stack */}
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-[#6B7280] font-medium">Tim:</span>
-            <div className="flex -space-x-2">
-              {(monitoring?.statusTim || [{ id: user.id, nama: user.nama, sudah_input: true }]).slice(0, 3).map((m) => (
-                <span
-                  key={m.id}
-                  title={m.nama}
-                  className={`w-7 h-7 rounded-full text-[10px] font-bold grid place-items-center ring-2 ring-white ${
-                    m.sudah_input ? "bg-[#0F766E] text-white" : "bg-[#E5E7EB] text-[#374151]"
-                  }`}
+      {/* WORKSPACE ROW: FLOATING SIDEBAR + CONTENT AREA (Pixel-Perfect Top Baseline Alignment & Spacious Navbar Breathing Room) */}
+      <div className="w-full max-w-[1600px] mx-auto px-4 sm:px-8 lg:px-12 xl:px-14 pt-[100px] sm:pt-[106px] lg:pt-[110px] pb-6 sm:pb-8 flex-1 flex gap-6 lg:gap-8 items-start min-h-0">
+        {/* FLOATING COLLAPSIBLE SIDEBAR CONTAINER */}
+        <motion.aside
+          animate={{
+            width: sidebarOpen ? 220 : 58,
+          }}
+          transition={SPRING}
+          className="hidden md:flex flex-col flex-shrink-0 z-30 sticky top-[100px] sm:top-[106px] lg:top-[110px] select-none"
+        >
+          <div className="w-full bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl rounded-[28px] p-1.5 border border-white/80 dark:border-white/10 shadow-[0_4px_24px_rgba(0,0,0,0.04)] flex flex-col items-center gap-2 transition-all">
+            {/* Sidebar Top Header Row: Logo + Brand + Collapse Toggle */}
+            <div className={`w-full flex items-center ${sidebarOpen ? "justify-between px-2" : "justify-center"}`}>
+              {sidebarOpen ? (
+                <>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <ProductivierLogo size={24} />
+                    <span className="font-extrabold text-xs tracking-wider text-slate-900 dark:text-white uppercase truncate">
+                      PRODUCTIVIER
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => setSidebarOpen(false)}
+                    className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 flex items-center justify-center transition cursor-pointer shrink-0"
+                    title="Ciutkan Sidebar"
+                    aria-label="Collapse Sidebar"
+                  >
+                    <PanelLeftClose className="w-4 h-4 stroke-[2.2]" />
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={() => setSidebarOpen(true)}
+                  className="w-11 h-11 rounded-full bg-white/90 dark:bg-slate-800/90 hover:bg-white text-slate-800 dark:text-slate-100 flex items-center justify-center shadow-xs transition backdrop-blur-md cursor-pointer hover:scale-105 active:scale-95 shrink-0"
+                  title="Buka Sidebar"
+                  aria-label="Expand Sidebar"
                 >
-                  {m.nama.slice(0, 2).toUpperCase()}
-                </span>
-              ))}
-              {monitoring && monitoring.statusTim.length > 3 && (
-                <span className="w-7 h-7 rounded-full bg-white text-[#111827] text-[10px] font-bold grid place-items-center ring-2 ring-white border border-black/10">
-                  +{monitoring.statusTim.length - 3}
-                </span>
+                  <PanelLeft className="w-5 h-5 stroke-[2.2]" />
+                </button>
               )}
             </div>
+
+            <div className="w-7 h-[1px] bg-slate-200/70 dark:bg-slate-700/70 my-0.5" />
+
+            {/* Navigation Buttons */}
+            <nav className="flex flex-col items-stretch w-full gap-1.5">
+              {NAV_ITEMS.map(({ id, label, Icon }) => {
+                const active = tab === id;
+                return (
+                  <button
+                    key={id}
+                    onClick={() => setTab(id)}
+                    title={label}
+                    className={`w-full h-11 rounded-full transition-colors flex items-center ${
+                      sidebarOpen ? "px-2.5 gap-3 justify-start" : "justify-center"
+                    } cursor-pointer ${
+                      active
+                        ? "bg-[#18181B] text-white shadow-md dark:bg-white dark:text-slate-900"
+                        : "bg-transparent hover:bg-slate-100/90 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-slate-900"
+                    }`}
+                  >
+                    <div className="w-6 h-6 flex items-center justify-center shrink-0">
+                      <Icon className="w-[18px] h-[18px]" />
+                    </div>
+                    {sidebarOpen && (
+                      <motion.span
+                        initial={{ opacity: 0, x: -6 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ duration: 0.15 }}
+                        className="text-xs font-bold whitespace-nowrap overflow-hidden text-ellipsis tracking-tight"
+                      >
+                        {label}
+                      </motion.span>
+                    )}
+                  </button>
+                );
+              })}
+            </nav>
+
+            <div className="w-7 h-[1px] bg-slate-200/70 dark:bg-slate-700/70 my-0.5" />
+
+            {/* Logout Action */}
+            <button
+              onClick={handleLogout}
+              className={`w-full h-11 rounded-full hover:bg-red-50 dark:hover:bg-red-950/40 text-slate-500 hover:text-red-600 flex items-center ${
+                sidebarOpen ? "px-2.5 gap-3 justify-start" : "justify-center"
+              } transition cursor-pointer`}
+              title="Keluar Akun"
+            >
+              <div className="w-6 h-6 flex items-center justify-center shrink-0">
+                <LogOut className="w-[18px] h-[18px]" />
+              </div>
+              {sidebarOpen && (
+                <motion.span
+                  initial={{ opacity: 0, x: -6 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.15 }}
+                  className="text-xs font-bold text-red-600 whitespace-nowrap"
+                >
+                  Keluar
+                </motion.span>
+              )}
+            </button>
           </div>
-        </div>
+        </motion.aside>
 
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={tab}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -6 }}
-            transition={{ duration: 0.2, ease: "easeOut" }}
-          >
-            {tab === "home" && (
-              <HomeTab
-                user={user}
-                viewMode={viewMode}
-                activeProjects={activeProjects}
-                projects={projects}
-                realisasi={realisasi}
-                monitoring={monitoring}
-                onGoProjects={() => setTab("projects")}
-                onGoInput={() => setTab("input")}
-                onGoReports={() => setTab("reports")}
-                showToast={showToast}
-              />
-            )}
+        {/* MAIN CONTENT AREA */}
+        <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
+          {/* ActionStatsBar: Hanya muncul di Dashboard (Home) dengan Diferensiasi Tim vs Pribadi */}
+          {tab === "home" && (
+            <section className="flex flex-wrap items-center justify-between gap-4 mb-6" data-purpose="hero-stats">
+              {/* Custom Morph Animated Dropdown */}
+              <div className="w-52 sm:w-64">
+                <CustomSelect
+                  value={selectedProjectId}
+                  onChange={setSelectedProjectId}
+                  options={projectFilterOptions}
+                  variant="pill"
+                />
+              </div>
 
-            {tab === "projects" && (
-              <ProjectsTab
-                user={user}
-                users={users}
-                projects={projects}
-                onRefresh={() => loadAll(user)}
-                showToast={showToast}
-              />
-            )}
+              {/* Dynamic Mode-Specific Metrics & CTA */}
+              <div className="flex flex-wrap items-center gap-5 sm:gap-7 lg:gap-8">
+                {viewMode === "pribadi" ? (
+                  <>
+                    {/* Mode Pribadi: Tugas Saya */}
+                    <div>
+                      <span className="block text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-0.5">
+                        Tugas Saya Selesai
+                      </span>
+                      <div className="flex items-baseline gap-1">
+                        <span className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight tabular-nums">
+                          {totalTasksDone.toLocaleString()}
+                        </span>
+                        <span className="text-sm text-slate-600 dark:text-slate-400 font-semibold">↗</span>
+                      </div>
+                    </div>
 
-            {tab === "input" && (
-              <InputTab
-                user={user}
-                projects={projects}
-                onSaved={async () => {
-                  await loadAll(user);
-                  showToast("Realisasi tersimpan");
-                  setTab("home");
-                }}
-              />
-            )}
+                    {/* Mode Pribadi: Efisiensi Diri */}
+                    <div>
+                      <span className="block text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-0.5">
+                        Efisiensi Diri
+                      </span>
+                      <div className="flex items-baseline gap-1">
+                        <span className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight tabular-nums">
+                          {completionPercentage}%
+                        </span>
+                        <span className="text-sm text-slate-600 dark:text-slate-400 font-semibold">↗</span>
+                      </div>
+                    </div>
 
-            {tab === "reports" && <ReportsTab realisasi={realisasi} showToast={showToast} />}
+                    {/* CTA Mode Pribadi */}
+                    <button
+                      onClick={() => setTab("input")}
+                      className="bg-[#1C1D21] hover:bg-black text-white px-5 py-2.5 rounded-full font-semibold text-xs flex items-center gap-2 shadow-lg shadow-black/10 transition active:scale-95 whitespace-nowrap cursor-pointer dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100"
+                      data-purpose="add-task-cta"
+                    >
+                      <span className="text-base leading-none">+</span>
+                      <span>Catat Tugas Diri</span>
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    {/* Mode Tim: Kepatuhan Input Tim */}
+                    <div>
+                      <span className="block text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-0.5">
+                        Kepatuhan Input Tim
+                      </span>
+                      <div className="flex items-baseline gap-1">
+                        <span className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight tabular-nums">
+                          {monitoring?.statusTim
+                            ? `${monitoring.statusTim.filter((s) => s.sudah_input).length}/${monitoring.statusTim.length}`
+                            : `${totalTasksDone}`}
+                        </span>
+                        <span className="text-sm text-slate-600 dark:text-slate-400 font-semibold">anggota</span>
+                      </div>
+                    </div>
 
-            {tab === "profile" && (
-              <ProfileTab
-                user={user}
-                users={users}
-                onUserUpdated={(updated) => {
-                  setUser(updated);
-                  localStorage.setItem("prod_next_user", JSON.stringify(updated));
-                  showToast("Profil diperbarui");
-                }}
-                onRefresh={() => loadAll(user)}
-                showToast={showToast}
-              />
-            )}
-          </motion.div>
-        </AnimatePresence>
-      </main>
+                    {/* Mode Tim: Output Beban Kerja */}
+                    <div>
+                      <span className="block text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-0.5">
+                        Output Kerja Tim
+                      </span>
+                      <div className="flex items-baseline gap-1">
+                        <span className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight tabular-nums">
+                          {realisasi.length}
+                        </span>
+                        <span className="text-sm text-slate-600 dark:text-slate-400 font-semibold">tugas ↗</span>
+                      </div>
+                    </div>
 
-      {/* MOBILE BOTTOM NAVIGATION BAR */}
-      <nav className="md:hidden fixed bottom-0 inset-x-0 bg-white/95 backdrop-blur-md border-t border-black/5 z-40">
-        <div className="flex justify-around py-1.5 px-1">
+                    {/* CTA Mode Tim */}
+                    <button
+                      onClick={() => setTab("input")}
+                      className="bg-[#1C1D21] hover:bg-black text-white px-5 py-2.5 rounded-full font-semibold text-xs flex items-center gap-2 shadow-lg shadow-black/10 transition active:scale-95 whitespace-nowrap cursor-pointer dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100"
+                      data-purpose="add-task-cta"
+                    >
+                      <span className="text-base leading-none">+</span>
+                      <span>Delegasikan Tugas</span>
+                    </button>
+                  </>
+                )}
+              </div>
+            </section>
+          )}
+
+          {/* MAIN TAB VIEWS */}
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={tab}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.22, ease: "easeOut" }}
+              className="flex-1 pb-20 md:pb-6"
+            >
+              {tab === "home" && (
+                <HomeTab
+                  user={user}
+                  viewMode={viewMode}
+                  activeProjectsCount={activeProjectsCount}
+                  projects={projects}
+                  realisasi={visibleRealisasi}
+                  monitoring={monitoring}
+                  onGoProjects={() => setTab("projects")}
+                  onGoCalendar={() => setTab("calendar")}
+                  onGoNotes={() => setTab("notes")}
+                  onGoChat={(draftMessage, projectId) => {
+                    if (draftMessage && typeof window !== "undefined") {
+                      sessionStorage.setItem("productivier_chat_draft", draftMessage);
+                      if (projectId) {
+                        sessionStorage.setItem("productivier_chat_project_id", String(projectId));
+                      }
+                    }
+                    setTab("chat");
+                  }}
+                  onGoInput={() => setTab("input")}
+                  onGoReports={() => setTab("reports")}
+                  onRefreshData={() => loadAll(user)}
+                  showToast={showToast}
+                />
+              )}
+
+              {tab === "projects" && (
+                <ProjectsTab
+                  user={user}
+                  users={users}
+                  projects={projects}
+                  onRefresh={() => loadAll(user)}
+                  onGoInput={() => setTab("input")}
+                  onGoNotes={(projId) => {
+                    if (projId && typeof window !== "undefined") {
+                      const url = new URL(window.location.href);
+                      url.searchParams.set("tab", "notes");
+                      url.searchParams.set("project_id", String(projId));
+                      window.history.pushState(null, "", url.toString());
+                    }
+                    setTab("notes");
+                  }}
+                  showToast={showToast}
+                />
+              )}
+
+              {tab === "calendar" && (
+                <CalendarTab
+                  user={user}
+                  projects={projects}
+                  realisasi={realisasi}
+                  showToast={showToast}
+                  onGoInput={() => setTab("input")}
+                />
+              )}
+
+              {tab === "notes" && (
+                <NotesTab
+                  user={user}
+                  projects={projects}
+                  showToast={showToast}
+                />
+              )}
+
+              {tab === "chat" && (
+                <ChatTab
+                  user={user}
+                  projects={projects}
+                  showToast={showToast}
+                />
+              )}
+
+              {tab === "input" && (
+                <InputTab
+                  user={user}
+                  projects={projects}
+                  onSaved={async () => {
+                    await loadAll(user);
+                    showToast("Realisasi berhasil disimpan");
+                    setTab("home");
+                  }}
+                />
+              )}
+
+              {tab === "reports" && (
+                <ReportsTab
+                  realisasi={visibleRealisasi}
+                  projects={projects}
+                  showToast={showToast}
+                  onRefresh={() => loadAll(user)}
+                />
+              )}
+
+              {tab === "profile" && (
+                <ProfileTab
+                  user={user}
+                  users={users}
+                  monitoring={monitoring}
+                  onUserUpdated={(updated) => {
+                    setUser(updated);
+                    localStorage.setItem("prod_next_user", JSON.stringify(updated));
+                    showToast("Profil diperbarui");
+                  }}
+                  onRefresh={() => loadAll(user)}
+                  showToast={showToast}
+                />
+              )}
+            </motion.div>
+          </AnimatePresence>
+        </main>
+      </div>
+
+      {/* MOBILE BOTTOM NAVIGATION DOCK */}
+      <nav className="md:hidden fixed bottom-4 inset-x-3 z-40 rounded-full bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border border-white/80 dark:border-white/10 shadow-[0_8px_32px_rgba(24,24,27,0.12)] px-1.5 py-1.5">
+        <div className="flex items-center justify-around">
           {NAV_ITEMS.map(({ id, label, Icon }) => {
             const active = tab === id;
             return (
               <button
                 key={id}
                 onClick={() => setTab(id)}
-                className={`relative flex flex-col items-center justify-center gap-0.5 min-h-[46px] min-w-[60px] rounded-xl px-2.5 transition-colors ${
-                  active ? "text-[#111827]" : "text-[#6B7280]"
+                className={`relative flex flex-col items-center justify-center min-h-[44px] min-w-[42px] rounded-full px-1.5 py-1 transition-colors cursor-pointer ${
+                  active ? "text-white dark:text-slate-900" : "text-slate-500 dark:text-slate-400 hover:text-slate-900"
                 }`}
               >
                 {active && (
                   <motion.span
-                    layoutId="mobile-nav-pill"
+                    layoutId="mobile-dock-pill"
                     transition={SPRING}
-                    className="absolute inset-0 bg-[#FDE047]/40 rounded-xl"
+                    className="absolute inset-0 bg-[#1C1D21] dark:bg-white rounded-full shadow-xs"
                   />
                 )}
-                <Icon className="relative z-10 w-5 h-5" />
-                <span className="relative z-10 text-[11px] font-semibold">{label}</span>
+                <Icon className="relative z-10 w-4 h-4" />
+                <span className="relative z-10 text-[9px] font-semibold mt-0.5 leading-none">
+                  {label}
+                </span>
               </button>
             );
           })}
         </div>
       </nav>
-    </div>
-  );
-}
 
-function HomeTab({
-  user,
-  viewMode,
-  activeProjects,
-  projects,
-  realisasi,
-  monitoring,
-  onGoProjects,
-  onGoInput,
-  onGoReports,
-  showToast,
-}: {
-  user: UserType;
-  viewMode: "pribadi" | "tim";
-  activeProjects: number;
-  projects: ProjectType[];
-  realisasi: RealisasiType[];
-  monitoring: MonitoringType | null;
-  onGoProjects: () => void;
-  onGoInput: () => void;
-  onGoReports: () => void;
-  showToast: (m: string) => void;
-}) {
-  const [selectedProjectId, setSelectedProjectId] = useState<string>("all");
-
-  const visibleRealisasi = useMemo(() => {
-    let list = realisasi;
-    if (viewMode === "pribadi") {
-      list = list.filter((r) => r.user_id === user.id);
-    }
-    if (selectedProjectId !== "all") {
-      list = list.filter((r) => String(r.project_id) === selectedProjectId);
-    }
-    return list;
-  }, [realisasi, viewMode, user.id, selectedProjectId]);
-
-  const heroPct = useMemo(() => {
-    if (!visibleRealisasi.length) return 0;
-    return Math.round(visibleRealisasi.reduce((a, b) => a + b.persentase, 0) / visibleRealisasi.length);
-  }, [visibleRealisasi]);
-
-  const copyQuickWA = () => {
-    const lines = visibleRealisasi
-      .slice(0, 10)
-      .map((r) => `- ${r.nama}: ${r.aktivitas} (${r.realisasi}/${r.target} ${r.satuan} = ${r.persentase}%)`);
-    navigator.clipboard.writeText(`*REKAP HARIAN*\n${lines.join("\n")}`);
-    showToast("Rekap WA disalin");
-  };
-
-  return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-      {/* LEFT COLUMN (Lisso Style: Project Selector + Giant 85% + Butter Yellow Activity Card) */}
-      <div className="lg:col-span-4 space-y-6">
-        <div className="bg-white/75 backdrop-blur-md border border-black/5 rounded-2xl p-3 shadow-xs flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-[#FEF08A] text-[#854D0E] grid place-items-center shrink-0">
-            <FolderKanban className="w-4 h-4" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <select
-              value={selectedProjectId}
-              onChange={(e) => setSelectedProjectId(e.target.value)}
-              className="w-full bg-transparent text-sm font-bold text-[#111827] focus:outline-none cursor-pointer truncate"
-            >
-              <option value="all">Semua Proyek ({projects.length})</option>
-              {projects.map((p) => (
-                <option key={p.id} value={String(p.id)}>
-                  {p.nama_proyek}
-                </option>
-              ))}
-            </select>
-            <div className="text-[11px] text-[#6B7280] truncate">Progres & Realisasi Tim</div>
-          </div>
-        </div>
-
-        <motion.div
-          key={`${viewMode}-${selectedProjectId}`}
-          initial={{ opacity: 0.4, scale: 0.96 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={SPRING}
-          className="px-1"
-        >
-          <div className="text-7xl font-normal tracking-tighter tabular-nums leading-none text-[#111827]">
-            {heroPct}%
-          </div>
-          <div className="text-sm text-[#4B5563] mt-2 font-medium">
-            {viewMode === "pribadi" ? "Produktivitas pribadi" : "Produktivitas tim hari ini"}
-          </div>
-        </motion.div>
-
-        {/* Butter Yellow Highlight Card + Floating White Pencil Button */}
-        <motion.div
-          layout
-          transition={SPRING}
-          className="relative bg-[#FCD34D] rounded-3xl p-5 pb-8 shadow-[0_12px_32px_rgb(252,211,77,0.3)] text-[#111827]"
-        >
-          <div className="flex items-center justify-between mb-4">
-            <span className="text-xs font-bold">Aktivitas Proyek</span>
-            <span className="px-2.5 py-0.5 rounded-full bg-[#4F46E5] text-white text-[10px] font-semibold">
-              Statistik
-            </span>
-          </div>
-          <div className="grid grid-cols-3 gap-2">
-            <div>
-              <div className="text-2xl font-semibold tabular-nums">{visibleRealisasi.length}</div>
-              <div className="text-[11px] text-[#111827]/75">Laporan</div>
-            </div>
-            <div>
-              <div className="text-2xl font-semibold tabular-nums">{activeProjects}</div>
-              <div className="text-[11px] text-[#111827]/75">Proyek</div>
-            </div>
-            <div>
-              <div className="text-2xl font-semibold tabular-nums">
-                {monitoring ? monitoring.statusTim.filter((u) => !u.sudah_input).length : 0}
-              </div>
-              <div className="text-[11px] text-[#111827]/75">Belum Input</div>
-            </div>
-          </div>
-          <button
-            onClick={onGoInput}
-            title="Input Realisasi Baru"
-            className="absolute -bottom-4 left-1/2 -translate-x-1/2 w-9 h-9 rounded-full bg-white text-[#111827] shadow-md border border-black/5 grid place-items-center hover:scale-105 active:scale-95 transition"
-          >
-            <Pencil className="w-4 h-4" />
-          </button>
-        </motion.div>
-      </div>
-
-      {/* CENTER COLUMN (Stacked White Realisasi Cards) */}
-      <div className="lg:col-span-5 space-y-4">
-        <AnimatePresence mode="popLayout">
-          {visibleRealisasi.slice(0, 3).map((r) => (
-            <motion.div
-              key={r.id}
-              layout
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.96 }}
-              transition={SPRING}
-              className="bg-white rounded-3xl p-5 shadow-[0_8px_24px_rgb(0,0,0,0.04)] border border-black/5 space-y-4"
-            >
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2 min-w-0">
-                  <BarChart3 className="w-4 h-4 text-[#111827] shrink-0" />
-                  <h3 className="font-semibold text-base truncate">{r.aktivitas}</h3>
-                </div>
-                <span
-                  className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold shrink-0 tabular-nums ${
-                    r.persentase >= 100
-                      ? "bg-[#34D399]/20 text-[#065F46]"
-                      : r.persentase >= 70
-                      ? "bg-[#FDE047]/40 text-[#854D0E]"
-                      : "bg-[#EF4444]/15 text-[#B91C1C]"
-                  }`}
-                >
-                  {r.persentase >= 100 ? "Tercapai" : `${r.persentase}%`}
-                </span>
-              </div>
-
-              <div className="grid grid-cols-3 gap-2 text-xs">
-                <div>
-                  <span className="text-[11px] text-[#6B7280] block">Pelaksana:</span>
-                  <strong className="font-medium text-[#111827]">{r.nama.split(" ")[0]}</strong>
-                </div>
-                <div>
-                  <span className="text-[11px] text-[#6B7280] block">Proyek:</span>
-                  <strong className="font-medium text-[#111827] truncate block">{r.nama_proyek || "-"}</strong>
-                </div>
-                <div>
-                  <span className="text-[11px] text-[#6B7280] block">Capaian:</span>
-                  <strong className="font-medium text-[#111827] tabular-nums">
-                    {r.realisasi}/{r.target} {r.satuan}
-                  </strong>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between pt-2 border-t border-black/5">
-                <div className="flex items-center gap-2">
-                  <span className="w-6 h-6 rounded-full bg-[#111827] text-[#FDE047] text-[10px] font-bold grid place-items-center">
-                    {r.nama.slice(0, 2).toUpperCase()}
-                  </span>
-                  <span className="text-[11px] text-[#6B7280] tabular-nums">{r.tanggal}</span>
-                </div>
-                <button
-                  onClick={onGoReports}
-                  className="px-4 py-1.5 rounded-full bg-[#111827] text-white text-xs font-medium hover:opacity-90 transition"
-                >
-                  Lihat Detail
-                </button>
-              </div>
-            </motion.div>
-          ))}
-        </AnimatePresence>
-
-        {visibleRealisasi.length === 0 && (
-          <div className="bg-white/90 border border-black/5 rounded-3xl p-6 text-center space-y-3">
-            <p className="text-sm font-semibold">Belum ada realisasi hari ini</p>
-            <button
-              onClick={onGoInput}
-              className="px-4 py-2 rounded-full bg-[#111827] text-white text-xs font-semibold"
-            >
-              + Catat Realisasi Pertama
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* RIGHT COLUMN (Quick Requests + Team Status Card) */}
-      <div className="lg:col-span-3 space-y-5">
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-semibold">Aksi Cepat</span>
-            <button onClick={onGoInput} className="text-xs font-medium text-[#4B5563] hover:text-[#111827]">
-              + Set Tugas
-            </button>
-          </div>
-          <div className="divide-y divide-black/10 text-xs">
-            <button
-              onClick={copyQuickWA}
-              className="w-full py-3 flex items-center justify-between text-left hover:text-[#0F766E] transition"
-            >
-              <span className="font-medium leading-snug pr-2">Salin ringkasan realisasi tim untuk WhatsApp</span>
-              <Play className="w-3 h-3 fill-current shrink-0" />
-            </button>
-            <button
-              onClick={onGoReports}
-              className="w-full py-3 flex items-center justify-between text-left hover:text-[#0F766E] transition"
-            >
-              <span className="font-medium leading-snug pr-2">Unduh laporan lengkap format CSV Excel</span>
-              <Play className="w-3 h-3 fill-current shrink-0" />
-            </button>
-            <button
-              onClick={onGoProjects}
-              className="w-full py-3 flex items-center justify-between text-left hover:text-[#0F766E] transition"
-            >
-              <span className="font-medium leading-snug pr-2">Pantau progres & target semua proyek</span>
-              <Play className="w-3 h-3 fill-current shrink-0" />
-            </button>
-          </div>
-        </div>
-
-        {/* Bottom Right Highlight Card (Lisso Voice Tasks equivalent -> Status Tim) */}
-        {monitoring && (
-          <div className="relative bg-white/85 backdrop-blur-md border border-black/5 rounded-3xl p-5 pb-8 shadow-xs space-y-3">
-            <span className="inline-block px-2.5 py-0.5 rounded-full bg-[#4F46E5] text-white text-[10px] font-semibold">
-              Status Tim
-            </span>
-            <div className="text-base font-semibold leading-snug">
-              {monitoring.statusTim.filter((u) => u.sudah_input).length} dari {monitoring.statusTim.length} anggota sudah input
-            </div>
-            <div className="space-y-1.5">
-              {monitoring.statusTim.slice(0, 3).map((u) => (
-                <div key={u.id} className="flex items-center justify-between text-[11px]">
-                  <span className="truncate font-medium">{u.nama}</span>
-                  {u.sudah_input ? (
-                    <span className="text-[#065F46] font-semibold inline-flex items-center gap-1">
-                      <CheckCircle2 className="w-3 h-3" /> {u.rata_persen}%
-                    </span>
-                  ) : (
-                    <span className="text-[#B91C1C] font-semibold inline-flex items-center gap-1">
-                      <Clock className="w-3 h-3" /> Belum
-                    </span>
-                  )}
-                </div>
-              ))}
-            </div>
-            <button
-              onClick={onGoReports}
-              title="Lihat Semua Laporan"
-              className="absolute -bottom-4 left-1/2 -translate-x-1/2 w-9 h-9 rounded-full bg-white text-[#111827] shadow-md border border-black/5 grid place-items-center hover:scale-105 transition"
-            >
-              <Users className="w-4 h-4" />
-            </button>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function ProjectsTab({
-  user,
-  users,
-  projects,
-  onRefresh,
-  showToast,
-}: {
-  user: UserType;
-  users: UserType[];
-  projects: ProjectType[];
-  onRefresh: () => Promise<void>;
-  showToast: (m: string) => void;
-}) {
-  const [nama, setNama] = useState("");
-  const [picId, setPicId] = useState(users[0]?.id ? String(users[0].id) : "");
-  const [divisi, setDivisi] = useState("Operasional");
-  const [target, setTarget] = useState("100");
-  const [satuan, setSatuan] = useState("Tugas");
-
-  const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    await fetch("/api/projects", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        nama_proyek: nama,
-        pic_id: picId || user.id,
-        divisi,
-        target_total: Number(target),
-        satuan,
-      }),
-    });
-    setNama("");
-    showToast("Proyek ditambahkan");
-    await onRefresh();
-  };
-
-  return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-      {user.role === "admin" && (
-        <div className="lg:col-span-5 bg-white/95 border border-black/5 rounded-3xl p-5 h-fit shadow-xs">
-          <h2 className="font-bold text-base mb-1">Buat Proyek Baru</h2>
-          <p className="text-xs text-[#6B7280] mb-4">Tentukan PIC dan total target capaian proyek.</p>
-          <form onSubmit={handleCreate} className="space-y-3">
-            <input
-              required
-              value={nama}
-              onChange={(e) => setNama(e.target.value)}
-              placeholder="Nama proyek (misal: Produksi Konten)"
-              className="w-full px-3.5 py-2.5 rounded-xl border border-black/10 bg-[#FAF9F6] text-base sm:text-sm"
-            />
-            <div className="grid grid-cols-2 gap-2.5">
-              <select
-                value={picId}
-                onChange={(e) => setPicId(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-xl border border-black/10 text-base sm:text-sm bg-white"
-              >
-                {users.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.nama}
-                  </option>
-                ))}
-              </select>
-              <input
-                required
-                value={divisi}
-                onChange={(e) => setDivisi(e.target.value)}
-                placeholder="Divisi"
-                className="w-full px-3 py-2.5 rounded-xl border border-black/10 text-base sm:text-sm"
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-2.5">
-              <input
-                type="number"
-                required
-                value={target}
-                onChange={(e) => setTarget(e.target.value)}
-                placeholder="Target Total"
-                className="w-full px-3 py-2.5 rounded-xl border border-black/10 text-base sm:text-sm"
-              />
-              <input
-                required
-                value={satuan}
-                onChange={(e) => setSatuan(e.target.value)}
-                placeholder="Satuan"
-                className="w-full px-3 py-2.5 rounded-xl border border-black/10 text-base sm:text-sm"
-              />
-            </div>
-            <button
-              type="submit"
-              className="w-full min-h-[44px] rounded-xl bg-[#111827] text-white font-semibold text-sm"
-            >
-              Simpan Proyek
-            </button>
-          </form>
-        </div>
-      )}
-
-      <div className={`${user.role === "admin" ? "lg:col-span-7" : "lg:col-span-12"} bg-white/95 border border-black/5 rounded-3xl p-5 shadow-xs`}>
-        <h2 className="font-bold text-base mb-3">Daftar Proyek ({projects.length})</h2>
-        <div className="divide-y divide-black/5">
-          {projects.map((p) => (
-            <div key={p.id} className="py-3.5">
-              <div className="flex items-center justify-between gap-2">
-                <strong className="text-sm">{p.nama_proyek}</strong>
-                <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-[#CCFBF1] text-[#115E59] tabular-nums">
-                  {p.persentase}%
-                </span>
-              </div>
-              <div className="text-xs text-[#6B7280] mt-1 tabular-nums">
-                PIC: {p.pic_nama || "-"} · {p.divisi} · {p.total_realisasi}/{p.target_total} {p.satuan} ({p.jumlah_laporan} laporan)
-              </div>
-              <div className="w-full h-2 bg-[#F5F1EB] rounded-full overflow-hidden mt-2.5">
-                <motion.div
-                  initial={{ width: 0 }}
-                  animate={{ width: `${p.persentase}%` }}
-                  transition={SPRING}
-                  className="h-full bg-[#111827] rounded-full"
-                />
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function InputTab({
-  user,
-  projects,
-  onSaved,
-}: {
-  user: UserType;
-  projects: ProjectType[];
-  onSaved: () => Promise<void>;
-}) {
-  const [projectId, setProjectId] = useState(projects[0]?.id ? String(projects[0].id) : "");
-  const [tanggal, setTanggal] = useState(new Date().toISOString().slice(0, 10));
-  const [aktivitas, setAktivitas] = useState("");
-  const [target, setTarget] = useState("");
-  const [realisasi, setRealisasi] = useState("");
-  const [satuan, setSatuan] = useState("Tugas");
-  const [kendala, setKendala] = useState("");
-  const [solusi, setSolusi] = useState("");
-  const [foto, setFoto] = useState("");
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    await fetch("/api/realisasi", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        project_id: projectId,
-        user_id: user.id,
-        nama: user.nama,
-        divisi: user.divisi,
-        tanggal,
-        aktivitas,
-        target: Number(target),
-        realisasi: Number(realisasi),
-        satuan,
-        kendala,
-        solusi,
-        bukti_foto_url: foto,
-      }),
-    });
-    await onSaved();
-  };
-
-  return (
-    <div className="max-w-2xl bg-white/95 border border-black/5 rounded-3xl p-6 shadow-xs">
-      <h2 className="font-bold text-base">Form Input Realisasi Harian</h2>
-      <p className="text-xs text-[#6B7280] mb-5">Capaian otomatis menambah progress bar proyek terkait.</p>
-      <form onSubmit={handleSubmit} className="space-y-3.5">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div>
-            <label className="block text-xs font-semibold text-[#4B5563] mb-1">Proyek</label>
-            <select
-              value={projectId}
-              onChange={(e) => setProjectId(e.target.value)}
-              className="w-full px-3.5 py-2.5 rounded-xl border border-black/10 text-base sm:text-sm bg-white"
-            >
-              {projects.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.nama_proyek} ({p.satuan})
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-[#4B5563] mb-1">Tanggal</label>
-            <input
-              type="date"
-              required
-              value={tanggal}
-              onChange={(e) => setTanggal(e.target.value)}
-              className="w-full px-3.5 py-2.5 rounded-xl border border-black/10 text-base sm:text-sm"
-            />
-          </div>
-        </div>
-        <input
-          required
-          value={aktivitas}
-          onChange={(e) => setAktivitas(e.target.value)}
-          placeholder="Aktivitas / Pekerjaan hari ini"
-          className="w-full px-3.5 py-2.5 rounded-xl border border-black/10 text-base sm:text-sm"
-        />
-        <div className="grid grid-cols-3 gap-3">
-          <input
-            type="number"
-            step="any"
-            required
-            value={target}
-            onChange={(e) => setTarget(e.target.value)}
-            placeholder="Target"
-            className="w-full px-3.5 py-2.5 rounded-xl border border-black/10 text-base sm:text-sm"
-          />
-          <input
-            type="number"
-            step="any"
-            required
-            value={realisasi}
-            onChange={(e) => setRealisasi(e.target.value)}
-            placeholder="Realisasi"
-            className="w-full px-3.5 py-2.5 rounded-xl border border-black/10 text-base sm:text-sm"
-          />
-          <input
-            required
-            value={satuan}
-            onChange={(e) => setSatuan(e.target.value)}
-            placeholder="Satuan"
-            className="w-full px-3.5 py-2.5 rounded-xl border border-black/10 text-base sm:text-sm"
-          />
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <input
-            value={kendala}
-            onChange={(e) => setKendala(e.target.value)}
-            placeholder="Kendala (opsional)"
-            className="w-full px-3.5 py-2.5 rounded-xl border border-black/10 text-base sm:text-sm"
-          />
-          <input
-            value={solusi}
-            onChange={(e) => setSolusi(e.target.value)}
-            placeholder="Solusi (opsional)"
-            className="w-full px-3.5 py-2.5 rounded-xl border border-black/10 text-base sm:text-sm"
-          />
-        </div>
-        <input
-          type="url"
-          value={foto}
-          onChange={(e) => setFoto(e.target.value)}
-          placeholder="Link bukti foto Cloudinary (opsional)"
-          className="w-full px-3.5 py-2.5 rounded-xl border border-black/10 text-base sm:text-sm"
-        />
-        <button
-          type="submit"
-          className="w-full min-h-[46px] rounded-xl bg-[#111827] text-white font-semibold text-sm hover:opacity-95 transition"
-        >
-          Simpan Realisasi
-        </button>
-      </form>
-    </div>
-  );
-}
-
-function ReportsTab({
-  realisasi,
-  showToast,
-}: {
-  realisasi: RealisasiType[];
-  showToast: (m: string) => void;
-}) {
-  const [query, setQuery] = useState("");
-
-  const filtered = useMemo(() => {
-    if (!query.trim()) return realisasi;
-    const q = query.toLowerCase();
-    return realisasi.filter(
-      (r) =>
-        r.aktivitas.toLowerCase().includes(q) ||
-        r.nama.toLowerCase().includes(q) ||
-        (r.nama_proyek || "").toLowerCase().includes(q)
-    );
-  }, [realisasi, query]);
-
-  const copyWA = () => {
-    const lines = filtered
-      .slice(0, 15)
-      .map((r) => `- ${r.tanggal} | ${r.nama}: ${r.aktivitas} (${r.realisasi}/${r.target} ${r.satuan} = ${r.persentase}%)`);
-    navigator.clipboard.writeText(`*REKAP REALISASI TIM*\n${lines.join("\n")}`);
-    showToast("Rekap WA disalin");
-  };
-
-  const exportCSV = () => {
-    const header = ["Tanggal", "Nama", "Divisi", "Proyek", "Aktivitas", "Target", "Realisasi", "Satuan", "Persentase", "Status"];
-    const rows = filtered.map((r) => [
-      r.tanggal, r.nama, r.divisi, r.nama_proyek || "-", r.aktivitas, r.target, r.realisasi, r.satuan, `${r.persentase}%`, r.status,
-    ]);
-    const csv = [header, ...rows].map((row) => row.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `rekap-realisasi-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    showToast("CSV diunduh");
-  };
-
-  return (
-    <div className="bg-white/95 border border-black/5 rounded-3xl p-5 space-y-4 shadow-xs">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h2 className="font-bold text-base">Laporan Realisasi ({filtered.length})</h2>
-          <p className="text-xs text-[#6B7280]">Salin rekap cepat ke WhatsApp atau unduh CSV untuk Excel.</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={copyWA}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-black/10 text-xs font-semibold hover:bg-[#F5F1EB]"
-          >
-            <Copy className="w-3.5 h-3.5" /> Copy WA
-          </button>
-          <button
-            onClick={exportCSV}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#111827] text-white text-xs font-semibold"
-          >
-            <Download className="w-3.5 h-3.5" /> Export CSV
-          </button>
-        </div>
-      </div>
-
-      <div className="relative">
-        <Search className="w-4 h-4 text-[#6B7280] absolute left-3.5 top-1/2 -translate-y-1/2" />
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Cari aktivitas, nama anggota, atau nama proyek..."
-          className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-black/10 bg-[#FAF9F6] text-xs focus:bg-white focus:outline-none focus:border-[#111827]"
-        />
-      </div>
-
-      <div className="divide-y divide-black/5">
-        {filtered.map((r) => (
-          <div key={r.id} className="py-3">
-            <div className="flex items-center justify-between gap-2">
-              <strong className="text-sm">{r.aktivitas}</strong>
-              <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-[#CCFBF1] text-[#115E59] tabular-nums shrink-0">
-                {r.persentase}%
-              </span>
-            </div>
-            <div className="text-xs text-[#6B7280] mt-1 tabular-nums">
-              {r.tanggal} · {r.nama} ({r.divisi}) · Proyek: {r.nama_proyek || "-"} · {r.realisasi}/{r.target} {r.satuan}
-            </div>
-            {r.bukti_foto_url && (
-              <a
-                href={r.bukti_foto_url}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#0F766E] mt-1"
-              >
-                Lihat Bukti Foto <ExternalLink className="w-3 h-3" />
-              </a>
-            )}
-          </div>
-        ))}
-        {filtered.length === 0 && <p className="text-xs text-[#6B7280] py-4">Belum ada data realisasi.</p>}
-      </div>
-    </div>
-  );
-}
-
-function ProfileTab({
-  user,
-  users,
-  onUserUpdated,
-  onRefresh,
-  showToast,
-}: {
-  user: UserType;
-  users: UserType[];
-  onUserUpdated: (u: UserType) => void;
-  onRefresh: () => Promise<void>;
-  showToast: (m: string) => void;
-}) {
-  const [nama, setNama] = useState(user.nama);
-  const [divisi, setDivisi] = useState(user.divisi);
-  const [pass, setPass] = useState("");
-
-  const [newUser, setNewUser] = useState("");
-  const [newPass, setNewPass] = useState("");
-  const [newNama, setNewNama] = useState("");
-  const [newDivisi, setNewDivisi] = useState("Operasional");
-  const [newRole, setNewRole] = useState<"karyawan" | "admin">("karyawan");
-
-  const saveMe = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const res = await fetch(`/api/users/${user.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        actor_id: user.id,
-        actor_role: user.role,
-        nama,
-        divisi,
-        password: pass,
-      }),
-    });
-    const data = await res.json();
-    if (res.ok) {
-      setPass("");
-      onUserUpdated(data.user);
-    }
-  };
-
-  const createMember = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const res = await fetch("/api/users", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        username: newUser,
-        password: newPass,
-        nama: newNama,
-        divisi: newDivisi,
-        role: newRole,
-      }),
-    });
-    if (res.ok) {
-      setNewUser("");
-      setNewPass("");
-      setNewNama("");
-      showToast("Akun tim dibuat");
-      await onRefresh();
-    }
-  };
-
-  const deleteMember = async (id: number) => {
-    await fetch(`/api/users/${id}`, { method: "DELETE" });
-    showToast("Akun dihapus");
-    await onRefresh();
-  };
-
-  return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-      <div className="lg:col-span-5 bg-white/95 border border-black/5 rounded-3xl p-5 h-fit shadow-xs">
-        <h2 className="font-bold text-base mb-1">Edit Profil Saya</h2>
-        <p className="text-xs text-[#6B7280] mb-4">Perbarui nama tampilan, divisi, atau password akun Anda.</p>
-        <form onSubmit={saveMe} className="space-y-3">
-          <input
-            required
-            value={nama}
-            onChange={(e) => setNama(e.target.value)}
-            placeholder="Nama Lengkap"
-            className="w-full px-3.5 py-2.5 rounded-xl border border-black/10 text-base sm:text-sm"
-          />
-          <input
-            required
-            value={divisi}
-            onChange={(e) => setDivisi(e.target.value)}
-            placeholder="Divisi"
-            className="w-full px-3.5 py-2.5 rounded-xl border border-black/10 text-base sm:text-sm"
-          />
-          <input
-            type="password"
-            value={pass}
-            onChange={(e) => setPass(e.target.value)}
-            placeholder="Password baru (kosongkan jika tidak diubah)"
-            className="w-full px-3.5 py-2.5 rounded-xl border border-black/10 text-base sm:text-sm"
-          />
-          <button
-            type="submit"
-            className="w-full min-h-[44px] rounded-xl bg-[#111827] text-white font-semibold text-sm"
-          >
-            Simpan Profil
-          </button>
-        </form>
-      </div>
-
-      {user.role === "admin" && (
-        <div className="lg:col-span-7 space-y-5">
-          <div className="bg-white/95 border border-black/5 rounded-3xl p-5 shadow-xs">
-            <h2 className="font-bold text-base mb-1">Panel Admin: Buat Akun Tim</h2>
-            <p className="text-xs text-[#6B7280] mb-4">Daftarkan username & password untuk anggota tim baru.</p>
-            <form onSubmit={createMember} className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <input
-                  required
-                  value={newUser}
-                  onChange={(e) => setNewUser(e.target.value)}
-                  placeholder="Username"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-black/10 text-base sm:text-sm"
-                />
-                <input
-                  required
-                  value={newPass}
-                  onChange={(e) => setNewPass(e.target.value)}
-                  placeholder="Password"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-black/10 text-base sm:text-sm"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <input
-                  required
-                  value={newNama}
-                  onChange={(e) => setNewNama(e.target.value)}
-                  placeholder="Nama Lengkap"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-black/10 text-base sm:text-sm"
-                />
-                <input
-                  required
-                  value={newDivisi}
-                  onChange={(e) => setNewDivisi(e.target.value)}
-                  placeholder="Divisi"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-black/10 text-base sm:text-sm"
-                />
-              </div>
-              <select
-                value={newRole}
-                onChange={(e) => setNewRole(e.target.value as "karyawan" | "admin")}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-black/10 text-base sm:text-sm bg-white"
-              >
-                <option value="karyawan">Anggota Tim</option>
-                <option value="admin">Admin / Leader</option>
-              </select>
-              <button
-                type="submit"
-                className="w-full min-h-[44px] rounded-xl bg-[#0F766E] text-white font-semibold text-sm"
-              >
-                Buat Akun Tim
-              </button>
-            </form>
-          </div>
-
-          <div className="bg-white/95 border border-black/5 rounded-3xl p-5 shadow-xs">
-            <h2 className="font-bold text-base mb-2">Daftar Akun Terdaftar ({users.length})</h2>
-            <div className="divide-y divide-black/5">
-              {users.map((u) => (
-                <div key={u.id} className="flex items-center justify-between py-3 text-xs">
-                  <div>
-                    <strong className="text-sm">{u.nama}</strong>{" "}
-                    <span className="text-[#6B7280]">
-                      (@{u.username} · {u.divisi} · {u.role})
-                    </span>
-                  </div>
-                  {u.username !== "fifa" ? (
-                    <button
-                      onClick={() => deleteMember(u.id)}
-                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-[#FEE2E2] text-[#B91C1C] font-semibold"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" /> Hapus
-                    </button>
-                  ) : (
-                    <span className="px-2.5 py-1 rounded-full bg-[#CCFBF1] text-[#115E59] font-semibold">
-                      Leader Utama
-                    </span>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Floating Draggable AI Agent (Universal Across All Tabs) */}
+      <FloatingAIAgent
+        user={user}
+        showToast={showToast}
+        onRefreshData={() => loadAll(user)}
+        onNavigateTab={(targetTab) => {
+          setTab(targetTab as TabType);
+        }}
+      />
     </div>
   );
 }
