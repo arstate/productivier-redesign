@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import { m, AnimatePresence } from "motion/react";
 import {
   ArrowLeft,
   Users,
@@ -425,7 +425,7 @@ export default function GroupInfoModal({
   };
 
   return (
-    <motion.div
+    <m.div
       initial={{ opacity: 0, x: 24 }}
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: 24 }}
@@ -1190,7 +1190,7 @@ export default function GroupInfoModal({
         <AnimatePresence>
           {confirmDialog && (
             <div className="absolute inset-0 bg-black/60 backdrop-blur-2xs rounded-3xl flex items-center justify-center p-5 z-20">
-              <motion.div
+              <m.div
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.9 }}
@@ -1236,10 +1236,10 @@ export default function GroupInfoModal({
                     {actionLoading ? "Memproses..." : "Ya, Lanjutkan"}
                   </button>
                 </div>
-              </motion.div>
+              </m.div>
             </div>
           )}
         </AnimatePresence>
-    </motion.div>
+    </m.div>
   );
 }

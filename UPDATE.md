@@ -1,5 +1,14 @@
 # 🚀 PRODUCTIVIER REDESIGN — RELEASE NOTES & SYSTEM UPDATES
 
+## ⚡ Versi v2.6.2 — Low-Spec Performance, LazyMotion, Delta Polling & SQLite WAL/Indexes
+*Tanggal: 25 November 2026*
+
+- **Code Splitting (`next/dynamic`):** Lazy-load `ProjectsTab`, `CalendarTab`, `NotesTab`, `InputTab`, `ReportsTab`, `ProfileTab`, `ChatTab`, `FloatingAIAgent`, `ProjectDetailView`, dan `GroupInfoModal` dengan fallback skeleton ringan.
+- **Animasi Smooth 60fps & Ringan (`LazyMotion`):** Membungkus aplikasi via `MotionProvider` (`LazyMotion` async `domMax` + `MotionConfig reducedMotion="user"`), mengonversi 12 file dari `motion` menjadi `m`, dan menambahkan `optimizePackageImports: ["lucide-react", "motion"]` + `compress: true` di `next.config.ts`.
+- **GPU Scroll & VRAM Relief:** Mengganti `background-attachment: fixed` di `globals.css` dengan fixed background layer terpisah di `layout.tsx`, serta mengganti 11 `backdrop-blur-md` pada kartu scroll di `ProjectDetailView.tsx` dengan permukaan translucent solid.
+- **Smart Visibility Polling & Delta Chat:** Menambahkan hook `useVisibilityPolling` (pause otomatis saat `document.hidden`), polling adaptif pada `FloatingAIAgent` (15s aktif / 45s idle), serta dukungan parameter `after_id` pada `GET /api/chat/messages` dan `ChatTab.tsx`.
+- **SQLite Tuning (`src/lib/db.ts`):** Mengaktifkan `WAL`, `synchronous = NORMAL`, `temp_store = MEMORY`, `cache_size = -16000`, `busy_timeout = 5000`, dan 8 indeks hot-path (`chat_messages`, `notifications`, `realisasi`, `personal_todos`, `notes`, `calendar_events`, `project_members`, `ai_action_requests`).
+
 ## 🧹 Versi v2.6.1 — ESLint Zero (0 Error, 0 Warning)
 *Tanggal: 25 November 2026*
 

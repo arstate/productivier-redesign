@@ -17,36 +17,48 @@ export async function GET(req: Request) {
 
     const { searchParams } = new URL(req.url);
     const groupId = searchParams.get('group_id');
+    const afterId = Number(searchParams.get('after_id') || '0');
 
     if (!groupId) {
       return NextResponse.json({ error: 'group_id parameter wajib diisi' }, { status: 400 });
     }
 
     const db = getDb();
-    const messages = db.prepare(`
-      SELECT * FROM (
-        SELECT 
-          m.id, 
-          m.group_id, 
-          m.user_id, 
-          m.sender_name, 
-          m.message, 
-          m.is_ai, 
-          m.reply_to_id,
-          rm.sender_name as reply_to_sender,
-          rm.message as reply_to_text,
-          m.reasoning_text,
-          m.created_at,
-          u.role as sender_role,
-          u.gender as sender_gender
-        FROM chat_messages m
-        LEFT JOIN users u ON m.user_id = u.id
-        LEFT JOIN chat_messages rm ON m.reply_to_id = rm.id
-        WHERE m.group_id = ?
-        ORDER BY m.id DESC
-        LIMIT 100
-      ) ORDER BY id ASC
-    `).all(Number(groupId)) as Row[];
+    const baseSelect = `
+      SELECT 
+        m.id, 
+        m.group_id, 
+        m.user_id, 
+        m.sender_name, 
+        m.message, 
+        m.is_ai, 
+        m.reply_to_id,
+        rm.sender_name as reply_to_sender,
+        rm.message as reply_to_text,
+        m.reasoning_text,
+        m.created_at,
+        u.role as sender_role,
+        u.gender as sender_gender
+      FROM chat_messages m
+      LEFT JOIN users u ON m.user_id = u.id
+      LEFT JOIN chat_messages rm ON m.reply_to_id = rm.id
+    `;
+
+    const messages = (afterId > 0
+      ? db.prepare(`
+          ${baseSelect}
+          WHERE m.group_id = ? AND m.id > ?
+          ORDER BY m.id ASC
+          LIMIT 100
+        `).all(Number(groupId), afterId)
+      : db.prepare(`
+          SELECT * FROM (
+            ${baseSelect}
+            WHERE m.group_id = ?
+            ORDER BY m.id DESC
+            LIMIT 100
+          ) ORDER BY id ASC
+        `).all(Number(groupId))) as Row[];
 
     const formattedMessages = messages.map((m) => ({
       id: m.id,

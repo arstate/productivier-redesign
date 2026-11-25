@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import { m, AnimatePresence } from "motion/react";
 import {
   Calendar as 
   ChevronLeft,
@@ -502,7 +502,7 @@ export default function CalendarTab({
                   const dayTasks = tasksByDate[dStr] || [];
 
                   return (
-                    <motion.div
+                    <m.div
                       key={dStr}
                       whileHover={{ scale: 1.02 }}
                       onClick={() => setSelectedDateStr(dStr)}
@@ -563,7 +563,7 @@ export default function CalendarTab({
                           </span>
                         )}
                       </div>
-                    </motion.div>
+                    </m.div>
                   );
                 })}
               </div>
@@ -798,14 +798,14 @@ export default function CalendarTab({
       {/* Add Event Modal with Custom Morph Dropdowns */}
       <AnimatePresence>
         {showAddModal && (
-          <motion.div
+          <m.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-[70] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4"
             onClick={() => setShowAddModal(false)}
           >
-            <motion.div
+            <m.div
               initial={{ scale: 0.95, y: 10 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.95, y: 10 }}
@@ -934,22 +934,22 @@ export default function CalendarTab({
                   </button>
                 </div>
               </form>
-            </motion.div>
-          </motion.div>
+            </m.div>
+          </m.div>
         )}
       </AnimatePresence>
 
       {/* Edit Event Modal with Custom Morph Dropdowns */}
       <AnimatePresence>
         {editingEvent && (
-          <motion.div
+          <m.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-[70] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4"
             onClick={() => setEditingEvent(null)}
           >
-            <motion.div
+            <m.div
               initial={{ scale: 0.95, y: 10 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.95, y: 10 }}
@@ -1078,8 +1078,8 @@ export default function CalendarTab({
                   </button>
                 </div>
               </form>
-            </motion.div>
-          </motion.div>
+            </m.div>
+          </m.div>
         )}
       </AnimatePresence>
 

@@ -4,6 +4,8 @@ out
 build
 *.db
 *.db-journal
+*.db-wal
+*.db-shm
 .env*.local
 .vercel
 *.log

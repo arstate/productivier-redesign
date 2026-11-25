@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import { m, AnimatePresence } from "motion/react";
 import {
   ArrowLeft,
   Share2,
@@ -760,7 +760,7 @@ export default function ProjectDetailView({
   return (
     <div className="space-y-6">
       {/* 1. TOP DEDICATED HEADER & ACTION BAR */}
-      <div className="dashboard-card p-6 sm:p-7 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md shadow-xs space-y-4">
+      <div className="dashboard-card p-6 sm:p-7 bg-white/95 dark:bg-slate-900/95 shadow-xs space-y-4">
         {/* Breadcrumb & Navigation */}
         <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-200/80 dark:border-slate-800">
           <div className="flex items-center gap-3 min-w-0">
@@ -937,7 +937,7 @@ export default function ProjectDetailView({
       {/* 2. BENTO ROW 1 — KEY PERFORMANCE METRICS (3 Asymmetric Cards) */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
         {/* Card 1: Progress & Target Velocity */}
-        <div className="dashboard-card p-6 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md shadow-xs flex flex-col justify-between">
+        <div className="dashboard-card p-6 bg-white/95 dark:bg-slate-900/95 shadow-xs flex flex-col justify-between">
           <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
             <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400">
               Capaian &amp; Progres Pengerjaan
@@ -981,7 +981,7 @@ export default function ProjectDetailView({
         </div>
 
         {/* Card 2: Cloud Workspace Launcher */}
-        <div className="dashboard-card p-6 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md shadow-xs flex flex-col justify-between">
+        <div className="dashboard-card p-6 bg-white/95 dark:bg-slate-900/95 shadow-xs flex flex-col justify-between">
           <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
             <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400">
               Cloud Resource Hub
@@ -1029,7 +1029,7 @@ export default function ProjectDetailView({
         </div>
 
         {/* Card 3: Client Feedback Status & Portal Hub */}
-        <div className="dashboard-card p-6 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md shadow-xs flex flex-col justify-between">
+        <div className="dashboard-card p-6 bg-white/95 dark:bg-slate-900/95 shadow-xs flex flex-col justify-between">
           <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
             <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400">
               Kanal Feedback Klien
@@ -1085,7 +1085,7 @@ export default function ProjectDetailView({
         {/* ================= LEFT COLUMN (7 Cols) ================= */}
         <div className="lg:col-span-7 space-y-5">
           {/* Sub-Tab Navigation Header */}
-          <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-md p-1.5 rounded-3xl border border-slate-200/80 dark:border-slate-800 flex items-center gap-1 shadow-xs">
+          <div className="bg-white/95 dark:bg-slate-900/95 p-1.5 rounded-3xl border border-slate-200/80 dark:border-slate-800 flex items-center gap-1 shadow-xs">
             <button
               onClick={() => setActiveLeftTab("resources")}
               className={`flex-1 py-2.5 px-3 rounded-2xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
@@ -1137,7 +1137,7 @@ export default function ProjectDetailView({
 
           {/* TAB CONTENT 1: CLOUD RESOURCE HUB */}
           {activeLeftTab === "resources" && (
-            <div className="dashboard-card p-6 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md shadow-xs space-y-4">
+            <div className="dashboard-card p-6 bg-white/95 dark:bg-slate-900/95 shadow-xs space-y-4">
               <div className="flex items-center justify-between pb-3 border-b border-slate-200/80 dark:border-slate-800">
                 <div>
                   <h3 className="text-base font-extrabold text-slate-900 dark:text-white">
@@ -1275,7 +1275,7 @@ export default function ProjectDetailView({
 
           {/* TAB CONTENT: CALENDAR & MILESTONE (NEW) */}
           {activeLeftTab === "calendar" && (
-            <div className="dashboard-card p-6 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md shadow-xs space-y-4">
+            <div className="dashboard-card p-6 bg-white/95 dark:bg-slate-900/95 shadow-xs space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200/80 dark:border-slate-800">
                 <div>
                   <div className="flex items-center gap-2">
@@ -1497,7 +1497,7 @@ export default function ProjectDetailView({
 
           {/* TAB CONTENT 2: INTERNAL PROJECT NOTES & CHECKLIST (Synced with Sidebar Notes) */}
           {activeLeftTab === "notes" && (
-            <div className="dashboard-card p-6 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md shadow-xs space-y-4">
+            <div className="dashboard-card p-6 bg-white/95 dark:bg-slate-900/95 shadow-xs space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200/80 dark:border-slate-800">
                 <div>
                   <div className="flex items-center gap-2">
@@ -1778,7 +1778,7 @@ export default function ProjectDetailView({
 
           {/* TAB CONTENT 3: REALISASI TASK LOGS */}
           {activeLeftTab === "realisasi" && (
-            <div className="dashboard-card p-6 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md shadow-xs space-y-4">
+            <div className="dashboard-card p-6 bg-white/95 dark:bg-slate-900/95 shadow-xs space-y-4">
               <div className="flex items-center justify-between pb-3 border-b border-slate-200/80 dark:border-slate-800">
                 <div>
                   <h3 className="text-base font-extrabold text-slate-900 dark:text-white">
@@ -2030,7 +2030,7 @@ export default function ProjectDetailView({
         {/* ================= RIGHT COLUMN (5 Cols) ================= */}
         <div className="lg:col-span-5 space-y-5">
           {/* TEAM COLLABORATORS WIDGET (NEW) */}
-          <div className="dashboard-card p-6 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md shadow-xs space-y-4">
+          <div className="dashboard-card p-6 bg-white/95 dark:bg-slate-900/95 shadow-xs space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-slate-200/80 dark:border-slate-800">
               <div>
                 <div className="flex items-center gap-2">
@@ -2130,7 +2130,7 @@ export default function ProjectDetailView({
           </div>
 
           {/* CLIENT FEEDBACK & REALTIME COLLABORATION STREAM */}
-          <div className="dashboard-card p-6 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md shadow-xs space-y-4">
+          <div className="dashboard-card p-6 bg-white/95 dark:bg-slate-900/95 shadow-xs space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-200/80 dark:border-slate-800">
               <div>
                 <div className="flex items-center gap-2">
@@ -2352,14 +2352,14 @@ export default function ProjectDetailView({
       {/* QUICK IN-PAGE PROGRESS INPUT MODAL (Zero-Navigation) */}
       <AnimatePresence>
         {showQuickInputModal && (
-          <motion.div
+          <m.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-[70] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
             onClick={() => setShowQuickInputModal(false)}
           >
-            <motion.div
+            <m.div
               initial={{ scale: 0.95, y: 15 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.95, y: 15 }}
@@ -2559,22 +2559,22 @@ export default function ProjectDetailView({
                   </button>
                 </div>
               </form>
-            </motion.div>
-          </motion.div>
+            </m.div>
+          </m.div>
         )}
       </AnimatePresence>
 
       {/* ADD MEMBER MODAL */}
       <AnimatePresence>
         {showAddMemberModal && (
-          <motion.div
+          <m.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-[70] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
             onClick={() => setShowAddMemberModal(false)}
           >
-            <motion.div
+            <m.div
               initial={{ scale: 0.95, y: 15 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.95, y: 15 }}
@@ -2642,8 +2642,8 @@ export default function ProjectDetailView({
                   </button>
                 </div>
               </div>
-            </motion.div>
-          </motion.div>
+            </m.div>
+          </m.div>
         )}
       </AnimatePresence>
 

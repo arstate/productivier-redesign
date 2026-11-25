@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import { m, AnimatePresence } from "motion/react";
 import {
   StickyNote,
   Plus,
@@ -415,7 +415,7 @@ export default function NotesTab({ user, projects, showToast }: NotesTabProps) {
         {filteredNotes.map((n) => {
 
           return (
-            <motion.div
+            <m.div
               key={n.id}
               layout
               initial={{ opacity: 1, y: 0 }}
@@ -539,7 +539,7 @@ export default function NotesTab({ user, projects, showToast }: NotesTabProps) {
                   {n.created_at?.slice(0, 10) || "Hari ini"}
                 </span>
               </div>
-            </motion.div>
+            </m.div>
           );
         })}
 
@@ -559,14 +559,14 @@ export default function NotesTab({ user, projects, showToast }: NotesTabProps) {
       {/* Add Note Modal */}
       <AnimatePresence>
         {showAddModal && (
-          <motion.div
+          <m.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-[70] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4"
             onClick={() => setShowAddModal(false)}
           >
-            <motion.div
+            <m.div
               initial={{ scale: 0.95, y: 10 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.95, y: 10 }}
@@ -738,20 +738,20 @@ export default function NotesTab({ user, projects, showToast }: NotesTabProps) {
                   </button>
                 </div>
               </form>
-            </motion.div>
-          </motion.div>
+            </m.div>
+          </m.div>
         )}
 
         {/* Edit Note Modal */}
         {editingNote && (
-          <motion.div
+          <m.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-[70] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4"
             onClick={() => setEditingNote(null)}
           >
-            <motion.div
+            <m.div
               initial={{ scale: 0.95, y: 10 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.95, y: 10 }}
@@ -925,8 +925,8 @@ export default function NotesTab({ user, projects, showToast }: NotesTabProps) {
                   </button>
                 </div>
               </form>
-            </motion.div>
-          </motion.div>
+            </m.div>
+          </m.div>
         )}
       </AnimatePresence>
 

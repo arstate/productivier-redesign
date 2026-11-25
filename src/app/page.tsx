@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import dynamic from "next/dynamic";
+import { m, AnimatePresence } from "motion/react";
 import {
   Home,
   LayoutGrid,
@@ -22,19 +23,31 @@ import {
 } from "lucide-react";
 
 import HomeTab from "@/components/dashboard/HomeTab";
-import ProjectsTab from "@/components/tabs/ProjectsTab";
-import CalendarTab from "@/components/tabs/CalendarTab";
-import NotesTab from "@/components/tabs/NotesTab";
-import InputTab from "@/components/tabs/InputTab";
-import ReportsTab from "@/components/tabs/ReportsTab";
-import ProfileTab from "@/components/tabs/ProfileTab";
-import ChatTab from "@/components/tabs/ChatTab";
-import FloatingAIAgent from "@/components/ai/FloatingAIAgent";
 import NotificationDropdown from "@/components/notifications/NotificationDropdown";
 import CustomSelect, { CustomSelectOption } from "@/components/ui/CustomSelect";
 import ProductivierLogo from "@/components/ui/ProductivierLogo";
 import { UserType, ProjectType, RealisasiType, MonitoringType, TabType, ViewModeType } from "@/types";
 import { MessageSquare } from "lucide-react";
+
+const TabFallback = () => (
+  <div className="dashboard-card p-6 md:p-8 animate-pulse space-y-4">
+    <div className="h-6 w-44 rounded-xl bg-slate-200/80 dark:bg-slate-800/80" />
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="h-28 rounded-2xl bg-slate-200/60 dark:bg-slate-800/60" />
+      <div className="h-28 rounded-2xl bg-slate-200/60 dark:bg-slate-800/60" />
+      <div className="h-28 rounded-2xl bg-slate-200/60 dark:bg-slate-800/60" />
+    </div>
+  </div>
+);
+
+const ProjectsTab = dynamic(() => import("@/components/tabs/ProjectsTab"), { loading: TabFallback });
+const CalendarTab = dynamic(() => import("@/components/tabs/CalendarTab"), { loading: TabFallback });
+const NotesTab = dynamic(() => import("@/components/tabs/NotesTab"), { loading: TabFallback });
+const InputTab = dynamic(() => import("@/components/tabs/InputTab"), { loading: TabFallback });
+const ReportsTab = dynamic(() => import("@/components/tabs/ReportsTab"), { loading: TabFallback });
+const ProfileTab = dynamic(() => import("@/components/tabs/ProfileTab"), { loading: TabFallback });
+const ChatTab = dynamic(() => import("@/components/tabs/ChatTab"), { loading: TabFallback });
+const FloatingAIAgent = dynamic(() => import("@/components/ai/FloatingAIAgent"), { ssr: false, loading: () => null });
 
 const NAV_ITEMS = [
   { id: "home", label: "Dashboard", shortLabel: "Home", Icon: Home },
@@ -310,7 +323,7 @@ export default function ProductivierApp() {
   if (!user) {
     return (
       <div className="min-h-screen bg-dashboard-gradient flex items-center justify-center p-4 sm:p-6 select-none antialiased">
-        <motion.div
+        <m.div
           initial={{ opacity: 0, y: 16, scale: 0.98 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           transition={SPRING}
@@ -378,7 +391,7 @@ export default function ProductivierApp() {
               <ChevronRight className="w-4 h-4" />
             </button>
           </form>
-        </motion.div>
+        </m.div>
       </div>
     );
   }
@@ -401,7 +414,7 @@ export default function ProductivierApp() {
       {/* GLOBAL TOAST */}
       <AnimatePresence>
         {toast && (
-          <motion.div
+          <m.div
             initial={{ opacity: 0, y: 16, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 16, scale: 0.95 }}
@@ -409,21 +422,21 @@ export default function ProductivierApp() {
           >
             <Sparkles className="w-3.5 h-3.5 text-[#D2F27C] dark:text-purple-600 shrink-0" />
             <span className="truncate">{toast}</span>
-          </motion.div>
+          </m.div>
         )}
       </AnimatePresence>
 
       {/* SEARCH MODAL */}
       <AnimatePresence>
         {searchOpen && (
-          <motion.div
+          <m.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-[70] bg-black/40 backdrop-blur-sm flex items-start justify-center pt-20 px-4"
             onClick={() => setSearchOpen(false)}
           >
-            <motion.div
+            <m.div
               initial={{ scale: 0.96, y: -10 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.96, y: -10 }}
@@ -525,8 +538,8 @@ export default function ProductivierApp() {
                   </div>
                 )}
               </div>
-            </motion.div>
-          </motion.div>
+            </m.div>
+          </m.div>
         )}
       </AnimatePresence>
 
@@ -655,7 +668,7 @@ export default function ProductivierApp() {
       {/* WORKSPACE ROW: FLOATING SIDEBAR + CONTENT AREA (Pixel-Perfect Top Baseline Alignment & Spacious Navbar Breathing Room) */}
       <div className="w-full max-w-[1600px] mx-auto px-3 sm:px-8 lg:px-12 xl:px-14 pt-[86px] sm:pt-[106px] lg:pt-[110px] pb-28 md:pb-10 flex-1 flex gap-6 lg:gap-8 items-start min-h-0">
         {/* FLOATING COLLAPSIBLE SIDEBAR CONTAINER */}
-        <motion.aside
+        <m.aside
           animate={{
             width: sidebarOpen ? 220 : 58,
           }}
@@ -717,14 +730,14 @@ export default function ProductivierApp() {
                       <Icon className="w-[18px] h-[18px]" />
                     </div>
                     {sidebarOpen && (
-                      <motion.span
+                      <m.span
                         initial={{ opacity: 0, x: -6 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ duration: 0.15 }}
                         className="text-xs font-bold whitespace-nowrap overflow-hidden text-ellipsis tracking-tight"
                       >
                         {label}
-                      </motion.span>
+                      </m.span>
                     )}
                   </button>
                 );
@@ -745,18 +758,18 @@ export default function ProductivierApp() {
                 <LogOut className="w-[18px] h-[18px]" />
               </div>
               {sidebarOpen && (
-                <motion.span
+                <m.span
                   initial={{ opacity: 0, x: -6 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ duration: 0.15 }}
                   className="text-xs font-bold text-red-600 whitespace-nowrap"
                 >
                   Keluar
-                </motion.span>
+                </m.span>
               )}
             </button>
           </div>
-        </motion.aside>
+        </m.aside>
 
         {/* MAIN CONTENT AREA */}
         <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
@@ -865,7 +878,7 @@ export default function ProductivierApp() {
 
           {/* MAIN TAB VIEWS */}
           <AnimatePresence mode="wait">
-            <motion.div
+            <m.div
               key={tab}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -1005,7 +1018,7 @@ export default function ProductivierApp() {
                   showToast={showToast}
                 />
               )}
-            </motion.div>
+            </m.div>
           </AnimatePresence>
         </main>
       </div>
@@ -1024,7 +1037,7 @@ export default function ProductivierApp() {
                 }`}
               >
                 {active && (
-                  <motion.span
+                  <m.span
                     layoutId="mobile-dock-pill"
                     transition={SPRING}
                     className="absolute inset-0 bg-[#1C1D21] dark:bg-white rounded-xl shadow-xs"

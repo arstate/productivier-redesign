@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState, useEffect, useLayoutEffect, useRef, useMemo } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import dynamic from "next/dynamic";
+import { m as MotionEl, AnimatePresence } from "motion/react";
 import {
   MessageSquare,
   Users,
@@ -21,10 +22,15 @@ import {
 } from "lucide-react";
 import { UserType, ProjectType, ChatGroupType, ChatMessageType } from "@/types";
 import CustomSelect, { CustomSelectOption } from "@/components/ui/CustomSelect";
-import GroupInfoModal from "@/components/chat/GroupInfoModal";
 import MarkdownText from "@/components/ui/MarkdownText";
+
+const GroupInfoModal = dynamic(
+  () => import("@/components/chat/GroupInfoModal"),
+  { ssr: false, loading: () => null }
+);
 import { stripThinkTags } from "@/lib/markdown";
 import AIMascot from "@/components/ui/AIMascot";
+import { useVisibilityPolling } from "@/hooks/useVisibilityPolling";
 
 
 interface ChatTabProps {
@@ -154,11 +160,19 @@ export default function ChatTab({ user, projects, showToast }: ChatTabProps) {
     }
   };
 
+  const lastMessageIdRef = useRef<number>(0);
+
+  useEffect(() => {
+    const last = messages[messages.length - 1];
+    lastMessageIdRef.current = typeof last?.id === "number" ? last.id : 0;
+  }, [messages]);
+
   const loadMessages = async (groupId: number) => {
     try {
       const res = await fetch(`/api/chat/messages?group_id=${groupId}`);
       const data = await res.json();
-      setMessages(data.messages || []);
+      const loaded: ChatMessageType[] = data.messages || [];
+      setMessages(loaded);
       scrollToBottom();
       requestAnimationFrame(scrollToBottom);
     } catch (e) {
@@ -166,35 +180,36 @@ export default function ChatTab({ user, projects, showToast }: ChatTabProps) {
     }
   };
 
-  // Background silent polling to fetch new messages & AI replies in real-time
+  // Background silent delta polling to fetch only new messages when tab is visible
   const loadMessagesSilently = async (groupId: number) => {
     try {
-      const res = await fetch(`/api/chat/messages?group_id=${groupId}`);
+      const afterId = lastMessageIdRef.current;
+      const url = afterId > 0
+        ? `/api/chat/messages?group_id=${groupId}&after_id=${afterId}`
+        : `/api/chat/messages?group_id=${groupId}`;
+      const res = await fetch(url);
       const data = await res.json();
       const freshMessages: ChatMessageType[] = data.messages || [];
-      if (freshMessages.length > 0) {
-        setMessages((prev) => {
-          const prevLast = prev[prev.length - 1];
-          const freshLast = freshMessages[freshMessages.length - 1];
-          const changed =
-            prev.length !== freshMessages.length ||
-            (prevLast && freshLast && (prevLast.id !== freshLast.id || prevLast.message !== freshLast.message));
+      if (freshMessages.length === 0) return;
 
-          if (changed) {
-            const isNearBottom =
-              chatContainerRef.current &&
-              chatContainerRef.current.scrollHeight - chatContainerRef.current.scrollTop - chatContainerRef.current.clientHeight < 140;
-            if (isNearBottom) {
-              scrollToBottom();
-            }
-            if (freshLast?.is_ai) {
-              setAiTyping(false);
-            }
-            return freshMessages;
-          }
-          return prev;
-        });
-      }
+      setMessages((prev) => {
+        const merged = afterId > 0
+          ? [...prev, ...freshMessages.filter((fm) => !prev.some((p) => p.id === fm.id))]
+          : freshMessages;
+        if (merged.length === prev.length && afterId > 0) return prev;
+
+        const isNearBottom =
+          chatContainerRef.current &&
+          chatContainerRef.current.scrollHeight - chatContainerRef.current.scrollTop - chatContainerRef.current.clientHeight < 140;
+        if (isNearBottom) {
+          scrollToBottom();
+        }
+        const freshLast = freshMessages[freshMessages.length - 1];
+        if (freshLast?.is_ai) {
+          setAiTyping(false);
+        }
+        return merged.slice(-150);
+      });
     } catch {
       // Silent error handling for background polling
     }
@@ -220,17 +235,20 @@ export default function ChatTab({ user, projects, showToast }: ChatTabProps) {
       // Reset reply saat ganti grup (derived dari activeGroupId).
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setReplyingToMessage(null);
+      lastMessageIdRef.current = 0;
       loadMessages(activeGroupId);
-
-      // Start 4s background polling interval while active group is selected
-      const interval = setInterval(() => {
-        loadMessagesSilently(activeGroupId);
-      }, 4000);
-      return () => clearInterval(interval);
     }
   // Efek mount/trigger tunggal: fungsi loader sengaja tidak jadi dependency agar tidak refetch tiap render.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeGroupId]);
+
+  useVisibilityPolling(
+    () => {
+      if (activeGroupId) return loadMessagesSilently(activeGroupId);
+    },
+    4000,
+    Boolean(activeGroupId)
+  );
 
   const activeGroup = groups.find((g) => g.id === activeGroupId) || null;
   const aiTrigger = activeGroup?.ai_name?.trim() ? activeGroup.ai_name.trim().replace(/\s+/g, '') : 'Miu';
@@ -744,7 +762,7 @@ export default function ChatTab({ user, projects, showToast }: ChatTabProps) {
                   }}
                 />
               ) : (
-                <motion.div
+                <MotionEl.div
                   key={`chat-room-${activeGroup.id}`}
                   initial={{ opacity: 0, x: -16 }}
                   animate={{ opacity: 1, x: 0 }}
@@ -844,7 +862,7 @@ export default function ChatTab({ user, projects, showToast }: ChatTabProps) {
                   const isAi = m.is_ai;
 
                   return (
-                    <motion.div
+                    <MotionEl.div
                       key={m.id}
                       id={`msg-${m.id}`}
                       initial={{ opacity: 0, y: 6 }}
@@ -955,11 +973,11 @@ export default function ChatTab({ user, projects, showToast }: ChatTabProps) {
 
                         <MarkdownText content={m.message} inverted={isMe} />
                       </div>
-                    </motion.div>
+                    </MotionEl.div>
                   );
                 })}
                 {aiTyping && (
-                  <motion.div
+                  <MotionEl.div
                     initial={{ opacity: 0, y: 6 }}
                     animate={{ opacity: 1, y: 0 }}
                     className="flex flex-col items-start space-y-1"
@@ -973,7 +991,7 @@ export default function ChatTab({ user, projects, showToast }: ChatTabProps) {
                         <span className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-bounce" />
                       </span>
                     </div>
-                  </motion.div>
+                  </MotionEl.div>
                 )}
                 <div ref={messagesEndRef} />
               </div>
@@ -983,7 +1001,7 @@ export default function ChatTab({ user, projects, showToast }: ChatTabProps) {
                 {/* Pinned Reply Banner */}
                 <AnimatePresence>
                   {replyingToMessage && (
-                    <motion.div
+                    <MotionEl.div
                       initial={{ opacity: 0, y: 6 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: 6 }}
@@ -1008,7 +1026,7 @@ export default function ChatTab({ user, projects, showToast }: ChatTabProps) {
                       >
                         <X className="w-3.5 h-3.5" />
                       </button>
-                    </motion.div>
+                    </MotionEl.div>
                   )}
                 </AnimatePresence>
 
@@ -1058,7 +1076,7 @@ export default function ChatTab({ user, projects, showToast }: ChatTabProps) {
                   {/* Interactive Dropup Autocomplete Menu for /project and /pro */}
                   <AnimatePresence>
                     {isSlashOpen && !slashDismissed && (
-                      <motion.div
+                      <MotionEl.div
                         initial={{ opacity: 0, y: 12, scale: 0.98 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: 8, scale: 0.98 }}
@@ -1143,7 +1161,7 @@ export default function ChatTab({ user, projects, showToast }: ChatTabProps) {
                             </div>
                           )}
                         </div>
-                      </motion.div>
+                      </MotionEl.div>
                     )}
                   </AnimatePresence>
 
@@ -1179,7 +1197,7 @@ export default function ChatTab({ user, projects, showToast }: ChatTabProps) {
                   </form>
                 </div>
               </div>
-                </motion.div>
+                </MotionEl.div>
               )}
             </AnimatePresence>
           ) : (
@@ -1199,14 +1217,14 @@ export default function ChatTab({ user, projects, showToast }: ChatTabProps) {
       {/* Modal: Create New Group (Leader Only) */}
       <AnimatePresence>
         {showCreateModal && (
-          <motion.div
+          <MotionEl.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-[70] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4"
             onClick={() => setShowCreateModal(false)}
           >
-            <motion.div
+            <MotionEl.div
               initial={{ scale: 0.95, y: 10 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.95, y: 10 }}
@@ -1280,8 +1298,8 @@ export default function ChatTab({ user, projects, showToast }: ChatTabProps) {
                   </button>
                 </div>
               </form>
-            </motion.div>
-          </motion.div>
+            </MotionEl.div>
+          </MotionEl.div>
         )}
       </AnimatePresence>
     </div>

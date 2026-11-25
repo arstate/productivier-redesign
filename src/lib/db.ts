@@ -46,6 +46,11 @@ function initDb(): DatabaseSync {
 
   db.exec(`
     PRAGMA foreign_keys = ON;
+    PRAGMA journal_mode = WAL;
+    PRAGMA synchronous = NORMAL;
+    PRAGMA temp_store = MEMORY;
+    PRAGMA cache_size = -16000;
+    PRAGMA busy_timeout = 5000;
 
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -242,6 +247,15 @@ function initDb(): DatabaseSync {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
+
+    CREATE INDEX IF NOT EXISTS idx_chat_messages_group_id ON chat_messages(group_id, id DESC);
+    CREATE INDEX IF NOT EXISTS idx_notifications_user_read ON notifications(user_id, is_read, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_realisasi_user_project ON realisasi(user_id, project_id, tanggal);
+    CREATE INDEX IF NOT EXISTS idx_personal_todos_user_done ON personal_todos(user_id, done);
+    CREATE INDEX IF NOT EXISTS idx_notes_user ON notes(user_id);
+    CREATE INDEX IF NOT EXISTS idx_calendar_date ON calendar_events(date);
+    CREATE INDEX IF NOT EXISTS idx_project_members_proj_user ON project_members(project_id, user_id);
+    CREATE INDEX IF NOT EXISTS idx_ai_actions_status_created ON ai_action_requests(status, created_at DESC);
   `);
 
   try {

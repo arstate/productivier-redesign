@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect, useLayoutEffect } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import { m, AnimatePresence } from "motion/react";
 import {
   Sparkles,
   X,
@@ -21,6 +21,7 @@ import {
 import { UserType, AIMessageType } from "@/types";
 import MarkdownText from "@/components/ui/MarkdownText";
 import AIMascot from "@/components/ui/AIMascot";
+import { useVisibilityPolling } from "@/hooks/useVisibilityPolling";
 
 
 // Web Speech API belum ada di lib.dom TypeScript; deklarasi minimal yang dipakai saja.
@@ -219,11 +220,15 @@ export default function FloatingAIAgent({
     // Polling ke API eksternal saat mount: setState terjadi setelah fetch (async), aman.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchPendingActions();
-    const interval = setInterval(fetchPendingActions, 15000);
-    return () => clearInterval(interval);
   // Efek mount/trigger tunggal: fungsi loader sengaja tidak jadi dependency agar tidak refetch tiap render.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user.id]);
+
+  useVisibilityPolling(
+    fetchPendingActions,
+    isOpen ? 15000 : 45000,
+    Boolean(user.id)
+  );
 
   const toggleThinkingBox = (msgId: string) => {
     setExpandedThinkingIds((prev) => ({
@@ -457,7 +462,7 @@ export default function FloatingAIAgent({
     <div className="fixed z-[60] pointer-events-none inset-0 overflow-hidden">
       {/* 1. COLLAPSED FLOATING ORB */}
       {!isOpen && (
-        <motion.div
+        <m.div
           drag
           dragMomentum={false}
           role="button"
@@ -494,13 +499,13 @@ export default function FloatingAIAgent({
               <span>Miu AI · Autonomous Full Controlling</span>
             </div>
           </div>
-        </motion.div>
+        </m.div>
       )}
 
       {/* 2. EXPANDED DRAGGABLE AI WORKSPACE */}
       <AnimatePresence>
         {isOpen && (
-          <motion.div
+          <m.div
             drag
             dragMomentum={false}
             initial={{ opacity: 0, scale: 0.9, y: 20 }}
@@ -957,7 +962,7 @@ export default function FloatingAIAgent({
                 </button>
               </form>
             </div>
-          </motion.div>
+          </m.div>
         )}
       </AnimatePresence>
     </div>

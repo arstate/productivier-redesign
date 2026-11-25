@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import { m, AnimatePresence } from "motion/react";
 import {
   Bell,
   Check,
@@ -14,6 +14,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { NotificationType, UserType } from "@/types";
+import { useVisibilityPolling } from "@/hooks/useVisibilityPolling";
 
 interface NotificationDropdownProps {
   user: UserType;
@@ -50,26 +51,14 @@ export default function NotificationDropdown({
   };
 
   useEffect(() => {
-    let active = true;
-    const sync = async () => {
-      try {
-        const res = await fetch(`/api/notifications?user_id=${user.id}`);
-        if (res.ok && active) {
-          const data = await res.json();
-          setNotifications(data.notifications || []);
-          setUnreadCount(data.unread_count || 0);
-        }
-      } catch {
-        // Ignore background fetch error
-      }
-    };
-    sync();
-    const interval = setInterval(sync, 12000);
-    return () => {
-      active = false;
-      clearInterval(interval);
-    };
+    // Load notifikasi awal saat mount; setState terjadi setelah fetch async.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchNotifications();
+  // Efek mount/trigger tunggal: fungsi loader sengaja tidak jadi dependency.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user.id]);
+
+  useVisibilityPolling(fetchNotifications, 12000, Boolean(user.id));
 
   // Click outside to close
   useEffect(() => {
@@ -283,7 +272,7 @@ export default function NotificationDropdown({
       {/* Popover Dropdown Panel */}
       <AnimatePresence>
         {isOpen && (
-          <motion.div
+          <m.div
             initial={{ opacity: 0, scale: 0.95, y: 10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 10 }}
@@ -438,7 +427,7 @@ export default function NotificationDropdown({
                 Pusat Notifikasi Real-time Productivier
               </span>
             </div>
-          </motion.div>
+          </m.div>
         )}
       </AnimatePresence>
     </div>

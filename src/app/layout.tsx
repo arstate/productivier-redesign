@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Plus_Jakarta_Sans, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
+import MotionProvider from "@/components/providers/MotionProvider";
 
 const jakarta = Plus_Jakarta_Sans({
   variable: "--font-sans",
@@ -30,8 +31,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="id" className={`${jakarta.variable} ${jetbrains.variable}`}>
-      <body className="antialiased bg-dashboard-gradient text-slate-900 selection:bg-[#D2F27C] selection:text-[#18181B] min-h-screen">
-        {children}
+      <body className="antialiased text-slate-900 selection:bg-[#D2F27C] selection:text-[#18181B] min-h-screen">
+        <div
+          aria-hidden="true"
+          className="fixed inset-0 -z-10 pointer-events-none bg-dashboard-gradient"
+        />
+        <MotionProvider>{children}</MotionProvider>
       </body>
     </html>
   );

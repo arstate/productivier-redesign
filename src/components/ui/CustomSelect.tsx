@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import { m, AnimatePresence } from "motion/react";
 import { ChevronDown, Check } from "lucide-react";
 
 export type CustomSelectOption = {
@@ -94,19 +94,19 @@ export default function CustomSelect({
         </div>
 
         {/* Morphing Animated Chevron */}
-        <motion.div
+        <m.div
           animate={{ rotate: isOpen ? 180 : 0 }}
           transition={{ type: "spring", stiffness: 500, damping: 30 }}
           className="shrink-0 text-slate-400 dark:text-slate-500"
         >
           <ChevronDown className="w-3.5 h-3.5" />
-        </motion.div>
+        </m.div>
       </button>
 
       {/* Morphing Animated Dropdown Menu */}
       <AnimatePresence>
         {isOpen && (
-          <motion.div
+          <m.div
             role="listbox"
             initial={{ opacity: 0, scale: 0.94, y: -6 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -173,7 +173,7 @@ export default function CustomSelect({
                 );
               })}
             </div>
-          </motion.div>
+          </m.div>
         )}
       </AnimatePresence>
     </div>
