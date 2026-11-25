@@ -1,11 +1,20 @@
 import { NextResponse } from 'next/server';
 import { getDb, verifyPassword, hashPassword } from '@/lib/db';
+import { attachSessionCookie, clearSessionCookie, getSessionUser } from '@/lib/auth';
+
+export async function GET(req: Request) {
+  const user = getSessionUser(req);
+  if (!user) {
+    return NextResponse.json({ error: 'Belum login atau sesi berakhir' }, { status: 401 });
+  }
+  return NextResponse.json({ authenticated: true, user });
+}
 
 export async function POST(req: Request) {
   try {
-    const { username, password } = await req.json();
-    const cleanUser = (username || '').trim();
-    const cleanPass = password || '';
+    const body = await req.json();
+    const cleanUser = typeof body?.username === 'string' ? body.username.trim() : '';
+    const cleanPass = typeof body?.password === 'string' ? body.password : '';
 
     if (!cleanUser || !cleanPass) {
       return NextResponse.json({ error: 'Username dan password wajib diisi!' }, { status: 400 });
@@ -41,20 +50,27 @@ export async function POST(req: Request) {
       db.prepare('UPDATE users SET password = ? WHERE id = ?').run(newHashedPassword, user.id);
     }
 
+    const normalizedRole = user.role === 'admin' ? 'admin' : 'karyawan';
     const safeUser = {
       id: user.id,
       username: user.username,
       nama: user.nama,
       divisi: user.divisi,
-      role: user.role,
+      role: normalizedRole,
       gender: user.gender,
       avatar_url: user.avatar_url,
       phone: user.phone,
     };
 
-    return NextResponse.json({ user: safeUser });
+    const res = NextResponse.json({ user: safeUser });
+    return attachSessionCookie(res, { id: user.id, role: normalizedRole });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'Login gagal';
     return NextResponse.json({ error: message }, { status: 500 });
   }
+}
+
+export async function DELETE() {
+  const res = NextResponse.json({ success: true });
+  return clearSessionCookie(res);
 }

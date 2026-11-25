@@ -1,21 +1,33 @@
 @import "tailwindcss";
 
-@custom-variant dark (&:where(.dark, .dark *));
+@custom-variant dark (.dark &, &.dark);
 
 :root {
   --background: #ECEEF3;
   --foreground: #18181B;
   --surface-card: #FFFFFF;
   --surface-border: rgba(255, 255, 255, 0.9);
+  --surface-shadow: 0 10px 35px -5px rgba(24, 24, 27, 0.03), 0 0 0 1px rgba(255, 255, 255, 0.9);
+  --bg-gradient: radial-gradient(circle at 4% 96%, #D6DCF2 0%, #ECEEF3 45%, #F4F5F8 100%);
   --primary: #18181B;
   --accent-lime: #D2F27C;
   --accent-purple: #DCD4FB;
   --accent-slate: #CBD5E1;
 }
 
+.dark {
+  --background: #0F1117;
+  --foreground: #F8FAFC;
+  --surface-card: #151923;
+  --surface-border: rgba(255, 255, 255, 0.08);
+  --surface-shadow: 0 12px 38px -6px rgba(0, 0, 0, 0.48), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  --bg-gradient: radial-gradient(circle at 4% 96%, #181E2E 0%, #0F1117 50%, #090B10 100%);
+  --primary: #FFFFFF;
+}
+
 html,
 body {
-  background: radial-gradient(circle at 4% 96%, #D6DCF2 0%, #ECEEF3 45%, #F4F5F8 100%);
+  background: var(--bg-gradient);
   background-attachment: fixed;
   color: var(--foreground);
   font-family: var(--font-sans), -apple-system, BlinkMacSystemFont, sans-serif;
@@ -23,14 +35,18 @@ body {
   min-height: 100dvh;
 }
 
+.bg-dashboard-gradient {
+  background: var(--bg-gradient);
+}
+
 .tabular-nums {
   font-variant-numeric: tabular-nums;
 }
 
-.intellecta-card {
-  background: #FFFFFF;
+.dashboard-card {
+  background: var(--surface-card);
   border-radius: 32px;
-  box-shadow: 0 10px 35px -5px rgba(24, 24, 27, 0.03), 0 0 0 1px rgba(255, 255, 255, 0.9);
+  box-shadow: var(--surface-shadow);
 }
 
 .chat-bubble-tail {
@@ -48,10 +64,18 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(24, 24, 27, 0.12);
+  background: rgba(24, 24, 27, 0.14);
   border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(24, 24, 27, 0.25);
+  background: rgba(24, 24, 27, 0.28);
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: rgba(248, 250, 252, 0.18);
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: rgba(248, 250, 252, 0.34);
 }

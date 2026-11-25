@@ -37,17 +37,26 @@ import { UserType, ProjectType, RealisasiType, MonitoringType, TabType, ViewMode
 import { MessageSquare } from "lucide-react";
 
 const NAV_ITEMS = [
-  { id: "home", label: "Dashboard", Icon: Home },
-  { id: "projects", label: "Proyek", Icon: LayoutGrid },
-  { id: "calendar", label: "Kalender", Icon: Calendar },
-  { id: "notes", label: "Notes", Icon: StickyNote },
-  { id: "chat", label: "Chat Tim", Icon: MessageSquare },
-  { id: "input", label: "Input", Icon: Zap },
-  { id: "reports", label: "Laporan", Icon: FileText },
-  { id: "profile", label: "Profil & Tim", Icon: User },
+  { id: "home", label: "Dashboard", shortLabel: "Home", Icon: Home },
+  { id: "projects", label: "Proyek", shortLabel: "Proyek", Icon: LayoutGrid },
+  { id: "calendar", label: "Kalender", shortLabel: "Agenda", Icon: Calendar },
+  { id: "notes", label: "Notes", shortLabel: "Memo", Icon: StickyNote },
+  { id: "chat", label: "Chat Tim", shortLabel: "Chat", Icon: MessageSquare },
+  { id: "input", label: "Input", shortLabel: "Input", Icon: Zap },
+  { id: "reports", label: "Laporan", shortLabel: "Rekap", Icon: FileText },
+  { id: "profile", label: "Profil & Tim", shortLabel: "Profil", Icon: User },
 ] as const;
 
 const SPRING = { type: "spring" as const, stiffness: 420, damping: 32 };
+
+function getDisplayGreetingName(fullName: string): string {
+  const clean = (fullName || "").trim();
+  if (!clean) return "Rekan";
+  if (clean.toLowerCase().startsWith("anggota ")) {
+    return clean;
+  }
+  return clean.split(" ")[0].replace(/[^\w\s-]/g, "") || clean;
+}
 
 export default function ProductivierApp() {
   const [user, setUser] = useState<UserType | null>(null);
@@ -68,19 +77,6 @@ export default function ProductivierApp() {
   const [selectedProjectId, setSelectedProjectId] = useState<string>("all");
   const [initialized, setInitialized] = useState(false);
 
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const params = new URLSearchParams(window.location.search);
-      if (params.get("sidebar") === "open") {
-        setSidebarOpen(true);
-      }
-      const requestedTab = params.get("tab") as TabType;
-      if (requestedTab && ["home", "projects", "calendar", "notes", "chat", "input", "reports", "profile"].includes(requestedTab)) {
-        setTab(requestedTab);
-      }
-    }
-  }, []);
-
   const showToast = (msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(""), 2600);
@@ -88,50 +84,64 @@ export default function ProductivierApp() {
 
   const loadAll = async (activeUser: UserType) => {
     try {
-      const [pRes, rRes] = await Promise.all([
+      const [pRes, rRes, uRes, mRes] = await Promise.all([
         fetch("/api/projects").then((r) => r.json()),
         fetch(`/api/realisasi?user_id=${activeUser.id}&role=${activeUser.role}`).then((r) => r.json()),
+        fetch("/api/users").then((r) => r.json()),
+        fetch("/api/monitoring").then((r) => r.json()),
       ]);
       setProjects(pRes.projects || []);
       setRealisasi(rRes.realisasi || []);
-
-      if (activeUser.role === "admin") {
-        const [uRes, mRes] = await Promise.all([
-          fetch("/api/users").then((r) => r.json()),
-          fetch("/api/monitoring").then((r) => r.json()),
-        ]);
-        setUsers(uRes.users || []);
-        setMonitoring(mRes);
-      }
+      setUsers(uRes.users || []);
+      setMonitoring(mRes || null);
     } catch (e) {
       console.error("Gagal memuat data", e);
     }
   };
 
   useEffect(() => {
-    const saved = localStorage.getItem("prod_next_user");
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved) as UserType;
-        setUser(parsed);
-        loadAll(parsed);
-      } catch {
-        localStorage.removeItem("prod_next_user");
+    let cancelled = false;
+    const bootstrapSession = async () => {
+      if (typeof window !== "undefined") {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get("sidebar") === "open") {
+          setSidebarOpen(true);
+        }
+        const requestedTab = params.get("tab") as TabType;
+        if (requestedTab && ["home", "projects", "calendar", "notes", "chat", "input", "reports", "profile"].includes(requestedTab)) {
+          setTab(requestedTab);
+        }
+        const savedDark = localStorage.getItem("productivier_dark_mode") === "1";
+        if (savedDark) {
+          document.documentElement.classList.add("dark");
+          setIsDarkMode(true);
+        }
       }
-    } else {
-      // Default demo login for seamless testing
-      const defaultUser: UserType = {
-        id: 1,
-        username: "fifa",
-        nama: "Fifa (Leader)",
-        divisi: "Operasional & Konten",
-        role: "admin",
-      };
-      setUser(defaultUser);
-      localStorage.setItem("prod_next_user", JSON.stringify(defaultUser));
-      loadAll(defaultUser);
-    }
-    setInitialized(true);
+      try {
+        const res = await fetch("/api/login", { cache: "no-store" });
+        if (res.ok) {
+          const data = await res.json();
+          if (!cancelled && data?.user) {
+            setUser(data.user);
+            localStorage.setItem("prod_next_user", JSON.stringify(data.user));
+            await loadAll(data.user);
+            setInitialized(true);
+            return;
+          }
+        }
+      } catch {
+        // Ignore network error during bootstrap
+      }
+      if (!cancelled) {
+        localStorage.removeItem("prod_next_user");
+        setUser(null);
+        setInitialized(true);
+      }
+    };
+    bootstrapSession();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -141,6 +151,13 @@ export default function ProductivierApp() {
       document.documentElement.classList.remove("dark");
     }
   }, [isDarkMode]);
+
+  const handleToggleDarkMode = (dark: boolean) => {
+    setIsDarkMode(dark);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("productivier_dark_mode", dark ? "1" : "0");
+    }
+  };
 
   useEffect(() => {
     const handleRefresh = () => {
@@ -180,9 +197,80 @@ export default function ProductivierApp() {
     }
   };
 
-  const handleLogout = () => {
+  const navigateWithContext = (
+    targetTab: string,
+    extra?: { groupId?: number; projectId?: number }
+  ) => {
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      url.searchParams.set("tab", targetTab);
+
+      if (extra?.projectId) {
+        url.searchParams.set("project_id", String(extra.projectId));
+        if (targetTab === "notes") {
+          sessionStorage.setItem("productivier_notes_project_id", String(extra.projectId));
+        } else if (targetTab === "calendar") {
+          sessionStorage.setItem("productivier_calendar_project_id", String(extra.projectId));
+        } else if (targetTab === "chat") {
+          sessionStorage.setItem("productivier_chat_project_id", String(extra.projectId));
+        }
+      } else if (targetTab !== "projects" && targetTab !== "notes" && targetTab !== "calendar") {
+        url.searchParams.delete("project_id");
+      }
+
+      if (extra?.groupId) {
+        sessionStorage.setItem("productivier_chat_group_id", String(extra.groupId));
+        url.searchParams.set("group", String(extra.groupId));
+      } else if (targetTab !== "chat") {
+        url.searchParams.delete("group");
+      }
+
+      window.history.pushState(null, "", url.toString());
+
+      if (extra?.projectId) {
+        window.dispatchEvent(
+          new CustomEvent("productivier:open_project", {
+            detail: { projectId: Number(extra.projectId) },
+          })
+        );
+      }
+      if (extra?.groupId) {
+        window.dispatchEvent(
+          new CustomEvent("productivier:open_chat_group", {
+            detail: { groupId: Number(extra.groupId) },
+          })
+        );
+      }
+    }
+    setTab(targetTab as TabType);
+  };
+
+  const handleSelectNavTab = (targetTab: TabType) => {
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      url.searchParams.set("tab", targetTab);
+      url.searchParams.delete("project_id");
+      url.searchParams.delete("group");
+      window.history.pushState(null, "", url.toString());
+      if (targetTab === "projects") {
+        window.dispatchEvent(new CustomEvent("productivier:reset_project_selection"));
+      }
+    }
+    setTab(targetTab);
+  };
+
+  const handleLogout = async () => {
+    try {
+      await fetch("/api/login", { method: "DELETE" });
+    } catch {
+      // Ignore network error on logout
+    }
     localStorage.removeItem("prod_next_user");
     setUser(null);
+    setMonitoring(null);
+    setProjects([]);
+    setRealisasi([]);
+    setUsers([]);
     setTab("home");
     showToast("Anda telah keluar akun");
   };
@@ -226,7 +314,7 @@ export default function ProductivierApp() {
           initial={{ opacity: 0, y: 16, scale: 0.98 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           transition={SPRING}
-          className="w-full max-w-md intellecta-card p-8 sm:p-10 dark:text-slate-100"
+          className="w-full max-w-md dashboard-card p-8 sm:p-10 dark:text-slate-100"
         >
           {/* Custom SVG Logo & Header */}
           <div className="flex items-center gap-3.5 mb-8">
@@ -258,7 +346,7 @@ export default function ProductivierApp() {
                 required
                 value={uName}
                 onChange={(e) => setUName(e.target.value)}
-                placeholder="fifa / tim1 / tim2"
+                placeholder="Masukkan username"
                 className="w-full px-4 py-3 rounded-2xl bg-slate-100/90 dark:bg-slate-800/90 border border-slate-200/70 dark:border-slate-700 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/10 transition"
               />
             </div>
@@ -271,7 +359,7 @@ export default function ProductivierApp() {
                 required
                 value={uPass}
                 onChange={(e) => setUPass(e.target.value)}
-                placeholder="cewekalay / tim123"
+                placeholder="Masukkan password"
                 className="w-full px-4 py-3 rounded-2xl bg-slate-100/90 dark:bg-slate-800/90 border border-slate-200/70 dark:border-slate-700 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/10 transition"
               />
             </div>
@@ -290,40 +378,18 @@ export default function ProductivierApp() {
               <ChevronRight className="w-4 h-4" />
             </button>
           </form>
-
-          {/* Quick Demo Access Buttons */}
-          <div className="mt-6 pt-5 border-t border-slate-200/60 dark:border-slate-700/60 text-center">
-            <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block mb-2.5">
-              Akses Cepat (Demo):
-            </span>
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <button
-                type="button"
-                onClick={() => handleLogin(undefined, { u: "fifa", p: "cewekalay" })}
-                className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-semibold transition cursor-pointer"
-              >
-                Fifa (Admin)
-              </button>
-              <button
-                type="button"
-                onClick={() => handleLogin(undefined, { u: "tim1", p: "tim123" })}
-                className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-semibold transition cursor-pointer"
-              >
-                Tim 1 (Karyawan)
-              </button>
-            </div>
-          </div>
         </motion.div>
       </div>
     );
   }
 
   const activeProjectsCount = projects.filter((p) => p.status === "aktif").length;
-  const visibleRealisasi = realisasi.filter((r) => {
-    const matchUser = viewMode === "pribadi" ? r.user_id === user.id : true;
-    const matchProject = selectedProjectId === "all" ? true : String(r.project_id) === selectedProjectId;
-    return matchUser && matchProject;
-  });
+  const modeFilteredRealisasi = realisasi.filter((r) =>
+    viewMode === "pribadi" ? r.user_id === user.id || r.assigned_to_user_id === user.id : true
+  );
+  const visibleRealisasi = modeFilteredRealisasi.filter((r) =>
+    selectedProjectId === "all" ? true : String(r.project_id) === selectedProjectId
+  );
 
   const totalTasksDone = visibleRealisasi.length;
   const completionPercentage = visibleRealisasi.length
@@ -331,18 +397,18 @@ export default function ProductivierApp() {
     : 0;
 
   return (
-    <div className="min-h-screen bg-radial from-[#D6DCF2] via-[#ECEEF3] to-[#F4F5F8] text-[#18181B] flex flex-col select-none antialiased">
+    <div className="min-h-screen bg-radial from-[#D6DCF2] via-[#ECEEF3] to-[#F4F5F8] dark:from-[#161925] dark:via-[#0F1117] dark:to-[#090B10] text-[#18181B] dark:text-slate-100 flex flex-col antialiased">
       {/* GLOBAL TOAST */}
       <AnimatePresence>
         {toast && (
           <motion.div
-            initial={{ opacity: 0, y: -16, scale: 0.95 }}
+            initial={{ opacity: 0, y: 16, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -16, scale: 0.95 }}
-            className="fixed top-6 right-6 z-50 bg-[#1C1D21] text-white text-xs font-semibold px-5 py-3 rounded-full shadow-xl flex items-center gap-2 border border-white/10"
+            exit={{ opacity: 0, y: 16, scale: 0.95 }}
+            className="fixed bottom-24 md:bottom-6 left-1/2 -translate-x-1/2 z-[80] max-w-[calc(100vw-32px)] bg-[#1C1D21] dark:bg-white text-white dark:text-slate-900 text-xs font-semibold px-5 py-3 rounded-full shadow-xl flex items-center gap-2 border border-white/10 dark:border-black/10"
           >
-            <Sparkles className="w-3.5 h-3.5 text-[#D2F27C]" />
-            <span>{toast}</span>
+            <Sparkles className="w-3.5 h-3.5 text-[#D2F27C] dark:text-purple-600 shrink-0" />
+            <span className="truncate">{toast}</span>
           </motion.div>
         )}
       </AnimatePresence>
@@ -354,7 +420,7 @@ export default function ProductivierApp() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-start justify-center pt-20 px-4"
+            className="fixed inset-0 z-[70] bg-black/40 backdrop-blur-sm flex items-start justify-center pt-20 px-4"
             onClick={() => setSearchOpen(false)}
           >
             <motion.div
@@ -362,7 +428,7 @@ export default function ProductivierApp() {
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.96, y: -10 }}
               onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-lg intellecta-card p-6 shadow-2xl dark:text-slate-100"
+              className="w-full max-w-lg dashboard-card p-6 shadow-2xl dark:text-slate-100"
             >
               <div className="flex items-center gap-3 border-b border-slate-200/80 dark:border-slate-700/80 pb-4">
                 <Search className="w-5 h-5 text-slate-400" />
@@ -466,16 +532,18 @@ export default function ProductivierApp() {
 
       {/* TOP FIXED NAVBAR (Fixed at absolute top 0, zero scroll gap) */}
       <header
-        className="fixed top-0 inset-x-0 z-40 bg-[#ECEEF3]/95 dark:bg-[#121316]/95 backdrop-blur-xl border-b border-black/[0.06] dark:border-white/[0.08] transition-colors shadow-[0_2px_16px_rgba(0,0,0,0.03)]"
+        className="fixed top-0 inset-x-0 z-40 bg-[#ECEEF3]/95 dark:bg-[#121316]/95 backdrop-blur-xl border-b border-black/[0.06] dark:border-white/[0.08] shadow-[0_2px_16px_rgba(0,0,0,0.03)]"
         data-purpose="top-header"
       >
-        <div className="w-full max-w-[1600px] mx-auto px-4 sm:px-8 lg:px-12 xl:px-14 py-3 sm:py-3.5 flex items-center justify-between gap-4">
+        <div className="w-full max-w-[1600px] mx-auto px-3 sm:px-8 lg:px-12 xl:px-14 py-2.5 sm:py-3.5 flex items-center justify-between gap-2 sm:gap-4">
           {/* Left: Morning Greeting (Clean Minimal - No Duplicate Logo) */}
-          <div className="flex items-center gap-3 sm:gap-4 min-w-0 pr-2">
+          <div className="flex items-center gap-2 sm:gap-4 min-w-0 pr-1">
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <h1 className="text-lg sm:text-xl md:text-2xl font-black text-slate-900 dark:text-white tracking-tight leading-tight truncate">
-                  Good morning, {user.nama.split(" ")[0]}!
+                <h1 className="text-sm sm:text-xl md:text-2xl font-black text-slate-900 dark:text-white tracking-tight leading-tight truncate">
+                  <span className="hidden sm:inline">Good morning, </span>
+                  <span className="sm:hidden">Halo, </span>
+                  {getDisplayGreetingName(user.nama)}!
                 </h1>
               </div>
               <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 font-medium truncate mt-0.5">
@@ -487,15 +555,15 @@ export default function ProductivierApp() {
           </div>
 
           {/* Center-Right Controls */}
-          <div className="flex items-center gap-2.5 sm:gap-4 shrink-0">
+          <div className="flex items-center gap-1 sm:gap-3.5 shrink-0">
             {/* View Mode Toggle: Pribadi vs Tim */}
-            <div className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-md rounded-full p-1 flex items-center gap-1 shadow-xs border border-white/60 dark:border-white/10">
+            <div className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-md rounded-full p-0.5 sm:p-1 flex items-center gap-0.5 sm:gap-1 shadow-xs border border-white/60 dark:border-white/10">
               <button
                 onClick={() => {
                   setViewMode("tim");
                   showToast("Mode Tampilan: Tim");
                 }}
-                className={`px-3 py-1 text-xs font-semibold rounded-full transition cursor-pointer ${
+                className={`px-2 sm:px-3.5 py-1 sm:py-1.5 min-h-[30px] sm:min-h-[34px] text-[11px] sm:text-xs font-semibold rounded-full transition cursor-pointer ${
                   viewMode === "tim"
                     ? "bg-[#1C1D21] text-white shadow-xs dark:bg-white dark:text-slate-900"
                     : "text-slate-600 dark:text-slate-300 hover:text-slate-900"
@@ -508,7 +576,7 @@ export default function ProductivierApp() {
                   setViewMode("pribadi");
                   showToast("Mode Tampilan: Pribadi");
                 }}
-                className={`px-3 py-1 text-xs font-semibold rounded-full transition cursor-pointer ${
+                className={`px-2 sm:px-3.5 py-1 sm:py-1.5 min-h-[30px] sm:min-h-[34px] text-[11px] sm:text-xs font-semibold rounded-full transition cursor-pointer ${
                   viewMode === "pribadi"
                     ? "bg-[#1C1D21] text-white shadow-xs dark:bg-white dark:text-slate-900"
                     : "text-slate-600 dark:text-slate-300 hover:text-slate-900"
@@ -518,11 +586,20 @@ export default function ProductivierApp() {
               </button>
             </div>
 
-            {/* Light / Dark Theme Switcher */}
-            <div className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-md rounded-full px-2.5 py-1.5 flex items-center gap-1.5 shadow-xs border border-white/60 dark:border-white/10">
+            {/* Single compact Light / Dark toggle on <640px mobile to save header width */}
+            <button
+              onClick={() => handleToggleDarkMode(!isDarkMode)}
+              className="sm:hidden w-8 h-8 rounded-full bg-white/80 dark:bg-slate-800/80 flex items-center justify-center text-slate-700 dark:text-slate-200 shadow-xs border border-white/60 dark:border-white/10 transition cursor-pointer"
+              title={isDarkMode ? "Light Mode" : "Dark Mode"}
+            >
+              {isDarkMode ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
+            </button>
+
+            {/* Dual Light / Dark Theme Switcher on sm+ */}
+            <div className="hidden sm:flex bg-white/80 dark:bg-slate-800/80 backdrop-blur-md rounded-full p-1 items-center gap-0.5 shadow-xs border border-white/60 dark:border-white/10">
               <button
-                onClick={() => setIsDarkMode(true)}
-                className={`p-1 rounded-full transition cursor-pointer ${
+                onClick={() => handleToggleDarkMode(true)}
+                className={`w-8 h-8 rounded-full flex items-center justify-center transition cursor-pointer ${
                   isDarkMode
                     ? "bg-slate-900 dark:bg-white text-white dark:text-slate-900"
                     : "text-slate-400 hover:text-slate-700"
@@ -532,8 +609,8 @@ export default function ProductivierApp() {
                 <Moon className="w-4 h-4" />
               </button>
               <button
-                onClick={() => setIsDarkMode(false)}
-                className={`w-6 h-6 rounded-full flex items-center justify-center transition cursor-pointer ${
+                onClick={() => handleToggleDarkMode(false)}
+                className={`w-8 h-8 rounded-full flex items-center justify-center transition cursor-pointer ${
                   !isDarkMode
                     ? "bg-white text-slate-800 shadow-xs"
                     : "text-slate-400 hover:text-slate-200"
@@ -547,7 +624,7 @@ export default function ProductivierApp() {
             {/* Global Search Button */}
             <button
               onClick={() => setSearchOpen(true)}
-              className="w-10 h-10 rounded-full bg-white/70 hover:bg-white dark:bg-slate-800/70 dark:hover:bg-slate-700 flex items-center justify-center text-slate-700 dark:text-slate-200 shadow-xs border border-white/60 dark:border-white/10 transition cursor-pointer"
+              className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-white/70 hover:bg-white dark:bg-slate-800/70 dark:hover:bg-slate-700 flex items-center justify-center text-slate-700 dark:text-slate-200 shadow-xs border border-white/60 dark:border-white/10 transition cursor-pointer"
               title="Pencarian Cepat"
             >
               <Search className="w-4 h-4" />
@@ -558,18 +635,16 @@ export default function ProductivierApp() {
               user={user}
               showToast={showToast}
               onRefreshData={() => loadAll(user)}
-              onNavigateTab={(targetTab) => {
-                setTab(targetTab as TabType);
-              }}
+              onNavigateTab={navigateWithContext}
             />
 
             {/* User Profile Avatar */}
             <div
               onClick={() => setTab("profile")}
-              className="relative cursor-pointer group"
+              className="relative cursor-pointer group shrink-0"
               title={`${user.nama} (${user.role})`}
             >
-              <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-[#D2F27C] via-amber-200 to-[#DCD4FB] ring-2 ring-white/80 dark:ring-slate-700 flex items-center justify-center font-bold text-xs text-slate-900 shadow-xs">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gradient-to-tr from-[#D2F27C] via-amber-200 to-[#DCD4FB] ring-2 ring-white/80 dark:ring-slate-700 flex items-center justify-center font-bold text-[11px] sm:text-xs text-slate-900 shadow-xs">
                 {user.nama.slice(0, 2).toUpperCase()}
               </div>
             </div>
@@ -578,7 +653,7 @@ export default function ProductivierApp() {
       </header>
 
       {/* WORKSPACE ROW: FLOATING SIDEBAR + CONTENT AREA (Pixel-Perfect Top Baseline Alignment & Spacious Navbar Breathing Room) */}
-      <div className="w-full max-w-[1600px] mx-auto px-4 sm:px-8 lg:px-12 xl:px-14 pt-[100px] sm:pt-[106px] lg:pt-[110px] pb-6 sm:pb-8 flex-1 flex gap-6 lg:gap-8 items-start min-h-0">
+      <div className="w-full max-w-[1600px] mx-auto px-3 sm:px-8 lg:px-12 xl:px-14 pt-[86px] sm:pt-[106px] lg:pt-[110px] pb-28 md:pb-10 flex-1 flex gap-6 lg:gap-8 items-start min-h-0">
         {/* FLOATING COLLAPSIBLE SIDEBAR CONTAINER */}
         <motion.aside
           animate={{
@@ -628,7 +703,7 @@ export default function ProductivierApp() {
                 return (
                   <button
                     key={id}
-                    onClick={() => setTab(id)}
+                    onClick={() => handleSelectNavTab(id)}
                     title={label}
                     className={`w-full h-11 rounded-full transition-colors flex items-center ${
                       sidebarOpen ? "px-2.5 gap-3 justify-start" : "justify-center"
@@ -770,12 +845,17 @@ export default function ProductivierApp() {
 
                     {/* CTA Mode Tim */}
                     <button
-                      onClick={() => setTab("input")}
+                      onClick={() => {
+                        if (user.role === "admin" && typeof window !== "undefined") {
+                          sessionStorage.setItem("productivier_input_delegate_mode", "1");
+                        }
+                        setTab("input");
+                      }}
                       className="bg-[#1C1D21] hover:bg-black text-white px-5 py-2.5 rounded-full font-semibold text-xs flex items-center gap-2 shadow-lg shadow-black/10 transition active:scale-95 whitespace-nowrap cursor-pointer dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100"
                       data-purpose="add-task-cta"
                     >
                       <span className="text-base leading-none">+</span>
-                      <span>Delegasikan Tugas</span>
+                      <span>{user.role === "admin" ? "Delegasikan Tugas" : "Catat Tugas Proyek"}</span>
                     </button>
                   </>
                 )}
@@ -798,6 +878,7 @@ export default function ProductivierApp() {
                   user={user}
                   viewMode={viewMode}
                   activeProjectsCount={activeProjectsCount}
+                  selectedProjectId={selectedProjectId}
                   projects={projects}
                   realisasi={visibleRealisasi}
                   monitoring={monitoring}
@@ -825,10 +906,30 @@ export default function ProductivierApp() {
                   user={user}
                   users={users}
                   projects={projects}
+                  viewMode={viewMode}
                   onRefresh={() => loadAll(user)}
-                  onGoInput={() => setTab("input")}
+                  onGoInput={(projId?: number, delegateUserId?: number) => {
+                    if (typeof window !== "undefined") {
+                      if (projId) sessionStorage.setItem("productivier_input_project_id", String(projId));
+                      if (delegateUserId) sessionStorage.setItem("productivier_input_delegate_user_id", String(delegateUserId));
+                    }
+                    setTab("input");
+                  }}
+                  onGoChat={(projectId) => {
+                    if (typeof window !== "undefined" && projectId) {
+                      sessionStorage.setItem("productivier_chat_project_id", String(projectId));
+                    }
+                    setTab("chat");
+                  }}
+                  onGoCalendar={(projectId) => {
+                    if (typeof window !== "undefined" && projectId) {
+                      sessionStorage.setItem("productivier_calendar_project_id", String(projectId));
+                    }
+                    setTab("calendar");
+                  }}
                   onGoNotes={(projId) => {
                     if (projId && typeof window !== "undefined") {
+                      sessionStorage.setItem("productivier_notes_project_id", String(projId));
                       const url = new URL(window.location.href);
                       url.searchParams.set("tab", "notes");
                       url.searchParams.set("project_id", String(projId));
@@ -869,7 +970,9 @@ export default function ProductivierApp() {
               {tab === "input" && (
                 <InputTab
                   user={user}
+                  users={users}
                   projects={projects}
+                  showToast={showToast}
                   onSaved={async () => {
                     await loadAll(user);
                     showToast("Realisasi berhasil disimpan");
@@ -880,7 +983,8 @@ export default function ProductivierApp() {
 
               {tab === "reports" && (
                 <ReportsTab
-                  realisasi={visibleRealisasi}
+                  user={user}
+                  realisasi={modeFilteredRealisasi}
                   projects={projects}
                   showToast={showToast}
                   onRefresh={() => loadAll(user)}
@@ -907,15 +1011,15 @@ export default function ProductivierApp() {
       </div>
 
       {/* MOBILE BOTTOM NAVIGATION DOCK */}
-      <nav className="md:hidden fixed bottom-4 inset-x-3 z-40 rounded-full bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border border-white/80 dark:border-white/10 shadow-[0_8px_32px_rgba(24,24,27,0.12)] px-1.5 py-1.5">
-        <div className="flex items-center justify-around">
-          {NAV_ITEMS.map(({ id, label, Icon }) => {
+      <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 rounded-t-2xl bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border-t border-black/5 dark:border-white/10 shadow-[0_-6px_28px_rgba(24,24,27,0.08)] px-1 pt-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+        <div className="grid grid-cols-8 gap-0.5">
+          {NAV_ITEMS.map(({ id, shortLabel, Icon }) => {
             const active = tab === id;
             return (
               <button
                 key={id}
-                onClick={() => setTab(id)}
-                className={`relative flex flex-col items-center justify-center min-h-[44px] min-w-[42px] rounded-full px-1.5 py-1 transition-colors cursor-pointer ${
+                onClick={() => handleSelectNavTab(id)}
+                className={`relative flex flex-col items-center justify-center min-h-[44px] rounded-xl px-0.5 py-1 transition-colors cursor-pointer ${
                   active ? "text-white dark:text-slate-900" : "text-slate-500 dark:text-slate-400 hover:text-slate-900"
                 }`}
               >
@@ -923,12 +1027,12 @@ export default function ProductivierApp() {
                   <motion.span
                     layoutId="mobile-dock-pill"
                     transition={SPRING}
-                    className="absolute inset-0 bg-[#1C1D21] dark:bg-white rounded-full shadow-xs"
+                    className="absolute inset-0 bg-[#1C1D21] dark:bg-white rounded-xl shadow-xs"
                   />
                 )}
-                <Icon className="relative z-10 w-4 h-4" />
-                <span className="relative z-10 text-[9px] font-semibold mt-0.5 leading-none">
-                  {label}
+                <Icon className="relative z-10 w-4 h-4 shrink-0" />
+                <span className="relative z-10 text-[10px] font-semibold mt-0.5 leading-none tracking-tight truncate max-w-full">
+                  {shortLabel}
                 </span>
               </button>
             );
@@ -941,9 +1045,8 @@ export default function ProductivierApp() {
         user={user}
         showToast={showToast}
         onRefreshData={() => loadAll(user)}
-        onNavigateTab={(targetTab) => {
-          setTab(targetTab as TabType);
-        }}
+        onNavigateTab={navigateWithContext}
+        hideOrbOnMobile={tab === "chat"}
       />
     </div>
   );

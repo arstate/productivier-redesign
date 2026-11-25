@@ -14,17 +14,20 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { ProjectType, RealisasiType } from "@/types";
+import { ProjectType, RealisasiType, UserType } from "@/types";
 import CustomSelect, { CustomSelectOption } from "@/components/ui/CustomSelect";
+import ConfirmModal from "@/components/ui/ConfirmModal";
 
 export default function ReportsTab({
   realisasi,
   projects,
+  user,
   showToast,
   onRefresh,
 }: {
   realisasi: RealisasiType[];
   projects: ProjectType[];
+  user?: UserType;
   showToast: (m: string) => void;
   onRefresh?: () => void;
 }) {
@@ -39,6 +42,8 @@ export default function ReportsTab({
   const [editKendala, setEditKendala] = useState("");
   const [editSolusi, setEditSolusi] = useState("");
   const [saving, setSaving] = useState(false);
+  const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const divisions = useMemo(() => {
     const set = new Set<string>();
@@ -90,7 +95,10 @@ export default function ReportsTab({
     try {
       const res = await fetch(`/api/realisasi/${editingItem.id}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(user?.id ? { "x-user-id": String(user.id) } : {}),
+        },
         body: JSON.stringify({
           aktivitas: editAktivitas.trim(),
           target: Number(editTarget),
@@ -115,22 +123,30 @@ export default function ReportsTab({
     }
   };
 
-  const handleDeleteRealisasi = async (id: number) => {
-    if (!confirm("Hapus catatan laporan realisasi ini?")) return;
+  const handleDeleteRealisasi = (id: number) => {
+    setDeleteTargetId(id);
+  };
+
+  const executeDeleteRealisasi = async () => {
+    if (deleteTargetId === null) return;
+    setDeleting(true);
     try {
-      const res = await fetch(`/api/realisasi/${id}`, {
+      const res = await fetch(`/api/realisasi/${deleteTargetId}`, {
         method: "DELETE",
       });
 
       if (res.ok) {
         showToast("Laporan realisasi berhasil dihapus");
+        setDeleteTargetId(null);
         triggerRefresh();
       } else {
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
         showToast(data.error || "Gagal menghapus realisasi");
       }
     } catch {
       showToast("Terjadi kesalahan jaringan");
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -204,7 +220,7 @@ export default function ReportsTab({
     <div className="space-y-6">
       {/* Top Mini KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="intellecta-card p-5 flex items-center justify-between dark:text-slate-100">
+        <div className="dashboard-card p-5 flex items-center justify-between dark:text-slate-100">
           <div>
             <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 block">
               Total Entri Realisasi
@@ -218,7 +234,7 @@ export default function ReportsTab({
           </div>
         </div>
 
-        <div className="intellecta-card p-5 flex items-center justify-between dark:text-slate-100">
+        <div className="dashboard-card p-5 flex items-center justify-between dark:text-slate-100">
           <div>
             <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 block">
               Rata-rata Capaian
@@ -232,7 +248,7 @@ export default function ReportsTab({
           </div>
         </div>
 
-        <div className="intellecta-card p-5 flex items-center justify-between dark:text-slate-100">
+        <div className="dashboard-card p-5 flex items-center justify-between dark:text-slate-100">
           <div>
             <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 block">
               Proyek Dipantau
@@ -248,7 +264,7 @@ export default function ReportsTab({
       </div>
 
       {/* Main Table Container */}
-      <div className="intellecta-card p-6 sm:p-8 space-y-5 dark:text-slate-100">
+      <div className="dashboard-card p-6 sm:p-8 space-y-5 dark:text-slate-100">
         {/* Toolbar Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-slate-200/80 dark:border-slate-700/80">
           <div>
@@ -340,6 +356,20 @@ export default function ReportsTab({
                     <td className="py-3 px-3 font-medium text-slate-800 dark:text-slate-200 min-w-[200px]">
                       <div>
                         <span>{r.aktivitas}</span>
+                        {(r.assigner_nama || r.deadline) && (
+                          <div className="flex items-center gap-1.5 flex-wrap mt-1">
+                            {r.assigner_nama && (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300">
+                                Didelegasikan oleh {r.assigner_nama}
+                              </span>
+                            )}
+                            {r.deadline && (
+                              <span className="text-[10px] text-slate-400">
+                                📅 Deadline: {r.deadline}
+                              </span>
+                            )}
+                          </div>
+                        )}
                         {(r.kendala || r.solusi) && (
                           <div className="mt-1 text-[11px] text-amber-600 dark:text-amber-400">
                             {r.kendala && <span>⚠️ Kendala: {r.kendala}</span>}
@@ -422,7 +452,7 @@ export default function ReportsTab({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4"
+            className="fixed inset-0 z-[70] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4"
             onClick={() => setEditingItem(null)}
           >
             <motion.div
@@ -430,7 +460,7 @@ export default function ReportsTab({
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.95, y: 10 }}
               onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-lg intellecta-card p-6 sm:p-8 shadow-2xl dark:text-slate-100"
+              className="w-full max-w-lg dashboard-card p-6 sm:p-8 shadow-2xl dark:text-slate-100"
             >
               <div className="flex items-center justify-between pb-4 border-b border-slate-200/80 dark:border-slate-700 mb-5">
                 <div>
@@ -533,6 +563,16 @@ export default function ReportsTab({
           </motion.div>
         )}
       </AnimatePresence>
+
+      <ConfirmModal
+        isOpen={deleteTargetId !== null}
+        title="Hapus Laporan Realisasi"
+        message="Yakin ingin menghapus catatan laporan realisasi ini? Data progres proyek akan diperbarui otomatis."
+        confirmLabel="Hapus Laporan"
+        loading={deleting}
+        onConfirm={executeDeleteRealisasi}
+        onCancel={() => !deleting && setDeleteTargetId(null)}
+      />
     </div>
   );
 }

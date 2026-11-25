@@ -18,11 +18,14 @@ import {
   Brain,
   ChevronDown,
   ChevronUp,
+  ArrowLeft,
+  Info,
 } from "lucide-react";
 import { UserType, ProjectType, ChatGroupType, ChatMessageType } from "@/types";
 import CustomSelect, { CustomSelectOption } from "@/components/ui/CustomSelect";
 import GroupInfoModal from "@/components/chat/GroupInfoModal";
 import MarkdownText from "@/components/ui/MarkdownText";
+import { stripThinkTags } from "@/lib/markdown";
 import AIMascot from "@/components/ui/AIMascot";
 
 const SPRING = { type: "spring" as const, stiffness: 420, damping: 32 };
@@ -53,6 +56,7 @@ export default function ChatTab({ user, projects, showToast }: ChatTabProps) {
 
   // Modal State for WhatsApp-style Group Info
   const [showGroupInfoModal, setShowGroupInfoModal] = useState(false);
+  const [mobilePane, setMobilePane] = useState<"list" | "chat">("chat");
 
   // Slash Tag Dropup State (/project or /pro)
   const [slashQuery, setSlashQuery] = useState("");
@@ -95,7 +99,7 @@ export default function ChatTab({ user, projects, showToast }: ChatTabProps) {
 
   useLayoutEffect(() => {
     scrollToBottom();
-  }, [messages, activeGroupId]);
+  }, [messages, activeGroupId, aiTyping]);
 
   useEffect(() => {
     scrollToBottom();
@@ -104,7 +108,7 @@ export default function ChatTab({ user, projects, showToast }: ChatTabProps) {
       requestAnimationFrame(scrollToBottom);
     });
     return () => cancelAnimationFrame(raf);
-  }, [messages.length, activeGroupId]);
+  }, [messages.length, activeGroupId, aiTyping]);
 
   const loadGroups = async () => {
     try {
@@ -113,9 +117,23 @@ export default function ChatTab({ user, projects, showToast }: ChatTabProps) {
       const loadedGroups = data.groups || [];
       setGroups(loadedGroups);
       if (loadedGroups.length > 0) {
+        const storedGroupId = typeof window !== "undefined"
+          ? sessionStorage.getItem("productivier_chat_group_id") || new URLSearchParams(window.location.search).get("group") || new URLSearchParams(window.location.search).get("group_id")
+          : null;
         const storedProjId = typeof window !== "undefined" ? sessionStorage.getItem("productivier_chat_project_id") : null;
+        if (typeof window !== "undefined") {
+          sessionStorage.removeItem("productivier_chat_group_id");
+          sessionStorage.removeItem("productivier_chat_project_id");
+        }
         let chosenGroupId = loadedGroups[0].id;
-        if (storedProjId) {
+        if (storedGroupId) {
+          const gIdNum = Number(storedGroupId);
+          const matchingByGroup = loadedGroups.find((g: any) => g.id === gIdNum);
+          if (matchingByGroup) {
+            chosenGroupId = matchingByGroup.id;
+            setMobilePane("chat");
+          }
+        } else if (storedProjId) {
           const pIdNum = Number(storedProjId);
           const matchingGroup = loadedGroups.find(
             (g: any) =>
@@ -124,9 +142,10 @@ export default function ChatTab({ user, projects, showToast }: ChatTabProps) {
           );
           if (matchingGroup) {
             chosenGroupId = matchingGroup.id;
+            setMobilePane("chat");
           }
         }
-        if (!activeGroupId || !loadedGroups.some((g: any) => g.id === activeGroupId)) {
+        if (storedGroupId || storedProjId || !activeGroupId || !loadedGroups.some((g: any) => g.id === activeGroupId)) {
           setActiveGroupId(chosenGroupId);
         }
       } else {
@@ -217,16 +236,25 @@ export default function ChatTab({ user, projects, showToast }: ChatTabProps) {
     (g.project_nama && g.project_nama.toLowerCase().includes(searchGroupQuery.toLowerCase()))
   );
 
-  // Auto-fill draft from other tabs (e.g. HomeTab Review & Kendala)
+  // Auto-fill draft and deep-link group/project from other tabs or notifications
   useEffect(() => {
     if (typeof window !== "undefined") {
       const draft = sessionStorage.getItem("productivier_chat_draft");
+      const targetGroupId = sessionStorage.getItem("productivier_chat_group_id");
       const targetProjId = sessionStorage.getItem("productivier_chat_project_id");
       if (draft) {
         setInputText(draft);
         sessionStorage.removeItem("productivier_chat_draft");
       }
-      if (targetProjId && groups.length > 0) {
+      if (targetGroupId && groups.length > 0) {
+        const gIdNum = Number(targetGroupId);
+        const matchingByGroup = groups.find((g) => g.id === gIdNum);
+        if (matchingByGroup) {
+          setActiveGroupId(matchingByGroup.id);
+          setMobilePane("chat");
+        }
+        sessionStorage.removeItem("productivier_chat_group_id");
+      } else if (targetProjId && groups.length > 0) {
         const pIdNum = Number(targetProjId);
         const matchingGroup = groups.find(
           (g) =>
@@ -235,10 +263,49 @@ export default function ChatTab({ user, projects, showToast }: ChatTabProps) {
         );
         if (matchingGroup) {
           setActiveGroupId(matchingGroup.id);
+          setMobilePane("chat");
+          sessionStorage.removeItem("productivier_chat_project_id");
+        } else {
+          sessionStorage.removeItem("productivier_chat_project_id");
+          const targetProj = projects.find((p) => p.id === pIdNum);
+          if (targetProj) {
+            fetch("/api/chat/groups", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                name: `Project ${targetProj.nama_proyek}`,
+                description: `Ruang koordinasi otomatis proyek ${targetProj.nama_proyek}`,
+                project_id: pIdNum,
+                member_ids: targetProj.member_ids || [user.id],
+              }),
+            })
+              .then((r) => r.json())
+              .then((d) => {
+                if (d?.id) {
+                  setActiveGroupId(d.id);
+                  setMobilePane("chat");
+                  loadGroups();
+                }
+              })
+              .catch(() => {});
+          }
         }
-        sessionStorage.removeItem("productivier_chat_project_id");
       }
     }
+  }, [groups]);
+
+  useEffect(() => {
+    const handleOpenGroup = (e: Event) => {
+      const customEvent = e as CustomEvent<{ groupId: number }>;
+      const targetId = customEvent.detail?.groupId;
+      if (targetId && groups.some((g) => g.id === Number(targetId))) {
+        setActiveGroupId(Number(targetId));
+      }
+    };
+    window.addEventListener("productivier:open_chat_group", handleOpenGroup);
+    return () => {
+      window.removeEventListener("productivier:open_chat_group", handleOpenGroup);
+    };
   }, [groups]);
 
   // Priority order: Connected to active group first, then other projects
@@ -487,14 +554,14 @@ export default function ChatTab({ user, projects, showToast }: ChatTabProps) {
 
   return (
     <div className="space-y-4">
-      {/* Tab Header Banner */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      {/* Tab Header Banner (Hidden on mobile chat detail pane so composer stays unobstructed above dock) */}
+      <div className={`${mobilePane === "chat" ? "hidden lg:flex" : "flex"} flex-col sm:flex-row sm:items-center justify-between gap-4`}>
         <div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <h2 className="text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight">
               Chat Tim &amp; Kolaborasi
             </h2>
-            <span className="px-2.5 py-0.5 rounded-full bg-[#D2F27C]/40 text-slate-900 dark:text-[#D2F27C] font-bold text-[10px] uppercase tracking-wider border border-[#D2F27C]/60">
+            <span className="px-2.5 py-0.5 rounded-full bg-[#D2F27C]/40 text-slate-900 dark:text-[#D2F27C] font-bold text-[11px] uppercase tracking-wider border border-[#D2F27C]/60 whitespace-nowrap shrink-0">
               Live Team Channel
             </span>
           </div>
@@ -522,10 +589,16 @@ export default function ChatTab({ user, projects, showToast }: ChatTabProps) {
         </div>
       </div>
 
-      {/* Main Chat Workspace Grid (2 Columns) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 h-[calc(100vh-220px)] min-h-[560px]">
+      {/* Main Chat Workspace Grid (Master-Detail Responsive) */}
+      <div
+        className={`grid grid-cols-1 lg:grid-cols-12 gap-5 ${
+          mobilePane === "chat"
+            ? "h-[calc(100dvh-195px)] min-h-[340px]"
+            : "h-[calc(100dvh-310px)] min-h-[340px]"
+        } lg:h-[calc(100vh-220px)] lg:min-h-[560px]`}
+      >
         {/* Left Column: Group Channels Directory (4 Cols) */}
-        <div className="lg:col-span-4 intellecta-card p-4 flex flex-col justify-between overflow-hidden">
+        <div className={`${mobilePane === "list" ? "flex" : "hidden lg:flex"} lg:col-span-4 dashboard-card p-4 flex-col justify-between overflow-hidden min-h-0`}>
           <div>
             {/* Search Box */}
             <div className="relative mb-3">
@@ -550,7 +623,11 @@ export default function ChatTab({ user, projects, showToast }: ChatTabProps) {
                 return (
                   <button
                     key={g.id}
-                    onClick={() => setActiveGroupId(g.id)}
+                    onClick={() => {
+                      setActiveGroupId(g.id);
+                      setShowGroupInfoModal(false);
+                      setMobilePane("chat");
+                    }}
                     className={`w-full text-left p-3 rounded-2xl transition flex items-start gap-3 cursor-pointer ${
                       isActive
                         ? "bg-[#18181B] text-white shadow-sm dark:bg-white dark:text-slate-900"
@@ -625,7 +702,7 @@ export default function ChatTab({ user, projects, showToast }: ChatTabProps) {
         </div>
 
         {/* Right Column: Chat Room & Message Feed (8 Cols) */}
-        <div className="lg:col-span-8 intellecta-card p-4 sm:p-5 flex flex-col justify-between overflow-hidden relative">
+        <div className={`${mobilePane === "chat" ? "flex" : "hidden lg:flex"} lg:col-span-8 dashboard-card p-4 sm:p-5 flex-col justify-between overflow-hidden min-h-0 relative`}>
           {activeGroup ? (
             <AnimatePresence mode="wait">
               {showGroupInfoModal ? (
@@ -666,14 +743,24 @@ export default function ChatTab({ user, projects, showToast }: ChatTabProps) {
                   transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
                   className="flex flex-col justify-between h-full overflow-hidden"
                 >
-              {/* Chat Room Top Bar (Clickable WhatsApp Style) */}
-              <div className="flex items-center justify-between pb-3.5 border-b border-black/[0.06] dark:border-white/[0.08] mb-3">
-                <button
-                  type="button"
-                  onClick={() => setShowGroupInfoModal(true)}
-                  className="flex items-center gap-3 min-w-0 text-left hover:bg-slate-50 dark:hover:bg-slate-800/60 p-1.5 -ml-1.5 rounded-2xl transition cursor-pointer group"
-                  title="Klik untuk melihat Detail Grup &amp; Anggota"
-                >
+              {/* Chat Room Top Bar (Clickable WhatsApp Style + Mobile Back + Explicit Info Icon) */}
+              <div className="flex items-center justify-between gap-2 pb-3.5 border-b border-black/[0.06] dark:border-white/[0.08] mb-3">
+                <div className="flex items-center gap-2 min-w-0">
+                  <button
+                    type="button"
+                    onClick={() => setMobilePane("list")}
+                    className="lg:hidden min-h-[38px] px-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-bold flex items-center gap-1 shrink-0 cursor-pointer"
+                    title="Kembali ke Daftar Saluran"
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                    <span>Saluran</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowGroupInfoModal(true)}
+                    className="flex items-center gap-3 min-w-0 text-left hover:bg-slate-50 dark:hover:bg-slate-800/60 p-1.5 -ml-1.5 rounded-2xl transition cursor-pointer group"
+                    title="Klik untuk melihat Detail Grup &amp; Anggota"
+                  >
                   <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-[#D2F27C] to-[#DCD4FB] text-slate-900 flex items-center justify-center font-black text-sm shrink-0 group-hover:scale-105 transition">
                     {activeGroup.name.slice(0, 2).toUpperCase()}
                   </div>
@@ -708,24 +795,35 @@ export default function ChatTab({ user, projects, showToast }: ChatTabProps) {
                       </div>
                     ) : (
                       <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
-                        {activeGroup.description || "Saluran obrolan koordinasi tim"} · <span className="text-purple-600 dark:text-[#D2F27C] font-semibold">Klik untuk info grup</span>
+                        {activeGroup.description || "Saluran obrolan koordinasi tim"}
                       </p>
                     )}
                   </div>
-                </button>
+                  </button>
+                </div>
 
                 <div className="flex items-center gap-2 shrink-0">
-                  <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-purple-50 dark:bg-purple-950/60 border border-purple-200/60 dark:border-purple-800/60 text-[10px] font-bold text-purple-700 dark:text-purple-300">
+                  <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-purple-50 dark:bg-purple-950/60 border border-purple-200/60 dark:border-purple-800/60 text-[11px] font-bold text-purple-700 dark:text-purple-300">
                     <AIMascot size={16} />
                     <span>{displayAiName} (@{aiTrigger})</span>
                   </div>
                   <button
+                    type="button"
                     onClick={() => handleSendMessage(undefined, `@${aiTrigger} Bantu rangkum poin pembahasan penting di grup ini`)}
-                    className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#D2F27C]/30 hover:bg-[#D2F27C]/50 text-slate-900 font-bold text-xs border border-[#D2F27C]/60 transition cursor-pointer"
+                    className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#D2F27C]/30 hover:bg-[#D2F27C]/50 text-slate-900 dark:text-white font-bold text-xs border border-[#D2F27C]/60 transition cursor-pointer"
                     title={`Panggil ${displayAiName} untuk Rangkuman`}
                   >
-                    <Sparkles className="w-3.5 h-3.5 text-slate-900" />
+                    <Sparkles className="w-3.5 h-3.5" />
                     <span>Rangkum Diskusi</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowGroupInfoModal(true)}
+                    className="w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 grid place-items-center transition cursor-pointer shrink-0"
+                    title="Info &amp; Pengaturan Grup"
+                    aria-label="Info Grup"
+                  >
+                    <Info className="w-4 h-4" />
                   </button>
                 </div>
               </div>
@@ -751,7 +849,7 @@ export default function ChatTab({ user, projects, showToast }: ChatTabProps) {
                             <AIMascot size={18} />
                             <span>{m.sender_name || displayAiName}</span>
                             <span className="px-1.5 py-0.2 rounded-full bg-purple-100 dark:bg-purple-950/70 text-[9px] font-bold text-purple-800 dark:text-purple-300 border border-purple-200/60">
-                              ⚡ {activeGroup?.ai_model?.includes("baidu") ? "ERNIE 5.5" : "Nemotron"} ({activeGroup?.ai_thinking_mode === "native" ? "Native" : activeGroup?.ai_thinking_mode === "direct" ? "Direct" : activeGroup?.ai_thinking_mode === "high" ? "High" : activeGroup?.ai_thinking_mode === "low" ? "Low" : "Medium"})
+                              AI
                             </span>
                           </span>
                         ) : (
@@ -778,9 +876,9 @@ export default function ChatTab({ user, projects, showToast }: ChatTabProps) {
                       </div>
 
                       <div
-                        className={`max-w-[85%] sm:max-w-[75%] px-4 py-2.5 rounded-2xl text-xs sm:text-sm leading-relaxed relative ${
+                        className={`min-w-0 max-w-[85%] sm:max-w-[75%] px-4 py-2.5 rounded-2xl text-xs sm:text-sm leading-relaxed relative ${
                           isAi
-                            ? "bg-gradient-to-r from-[#DCD4FB]/40 via-purple-50/50 to-white/90 dark:from-purple-950/40 dark:to-slate-800 border border-[#DCD4FB]/80 text-slate-900 dark:text-slate-100 shadow-xs"
+                            ? "bg-gradient-to-r from-[#DCD4FB]/40 via-purple-50/50 to-white/90 dark:from-purple-950/60 dark:via-slate-900/90 dark:to-slate-800/90 border border-[#DCD4FB]/80 dark:border-purple-800/50 text-slate-900 dark:text-slate-100 shadow-xs"
                             : isMe
                             ? "bg-[#18181B] text-white dark:bg-white dark:text-slate-900 shadow-sm rounded-tr-xs"
                             : "bg-slate-100/90 dark:bg-slate-800 text-slate-900 dark:text-white rounded-tl-xs"
@@ -830,7 +928,7 @@ export default function ChatTab({ user, projects, showToast }: ChatTabProps) {
                               className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-purple-100/80 hover:bg-purple-200/80 dark:bg-purple-950/60 dark:hover:bg-purple-900/60 text-purple-900 dark:text-purple-200 text-[11px] font-bold border border-purple-200/70 dark:border-purple-800/60 transition cursor-pointer select-none"
                             >
                               <Brain className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
-                              <span>🧠 Native Thinking ({m.sender_name || displayAiName})</span>
+                              <span>Reasoning</span>
                               {expandedReasoningIds[m.id] ? (
                                 <ChevronUp className="w-3 h-3 text-purple-600 dark:text-purple-400" />
                               ) : (
@@ -840,13 +938,13 @@ export default function ChatTab({ user, projects, showToast }: ChatTabProps) {
 
                             {expandedReasoningIds[m.id] && (
                               <div className="mt-1.5 p-2.5 rounded-xl bg-purple-50/90 dark:bg-purple-950/40 border border-purple-200/60 dark:border-purple-800/50 text-[11px] font-mono whitespace-pre-wrap text-slate-800 dark:text-slate-200 leading-relaxed max-h-60 overflow-y-auto">
-                                {m.reasoning_text}
+                                {stripThinkTags(m.reasoning_text || "")}
                               </div>
                             )}
                           </div>
                         )}
 
-                        <MarkdownText content={m.message} />
+                        <MarkdownText content={m.message} inverted={isMe} />
                       </div>
                     </motion.div>
                   );
@@ -855,16 +953,16 @@ export default function ChatTab({ user, projects, showToast }: ChatTabProps) {
                   <motion.div
                     initial={{ opacity: 0, y: 6 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="flex flex-col items-start"
+                    className="flex flex-col items-start space-y-1"
                   >
-                    <div className="flex items-center gap-1.5 mb-1 text-[10px] text-purple-600 dark:text-purple-300 font-bold">
-                      <AIMascot size={18} className="animate-pulse" />
-                      <span>{displayAiName} sedang mengetik...</span>
-                    </div>
-                    <div className="px-4 py-2.5 rounded-2xl rounded-tl-xs bg-gradient-to-r from-[#DCD4FB]/40 via-purple-50/50 to-white/90 dark:from-purple-950/40 dark:to-slate-800 border border-[#DCD4FB]/80 flex items-center gap-1.5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-bounce [animation-delay:-0.3s]" />
-                      <span className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-bounce [animation-delay:-0.15s]" />
-                      <span className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-bounce" />
+                    <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-purple-100/80 dark:bg-purple-950/70 border border-purple-200/80 dark:border-purple-800 text-purple-900 dark:text-purple-200 text-xs font-bold shadow-2xs">
+                      <AIMascot size={18} className="animate-pulse shrink-0" />
+                      <span>Reasoning...</span>
+                      <span className="flex gap-1 items-center ml-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-bounce [animation-delay:-0.3s]" />
+                        <span className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-bounce [animation-delay:-0.15s]" />
+                        <span className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-bounce" />
+                      </span>
                     </div>
                   </motion.div>
                 )}
@@ -956,7 +1054,7 @@ export default function ChatTab({ user, projects, showToast }: ChatTabProps) {
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: 8, scale: 0.98 }}
                         transition={{ duration: 0.15 }}
-                        className="absolute bottom-full mb-3 left-0 right-0 sm:left-1 sm:right-auto sm:w-[480px] intellecta-card p-3 rounded-2xl shadow-2xl z-40 border border-slate-300 dark:border-slate-700 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md"
+                        className="absolute bottom-full mb-3 left-0 right-0 sm:left-1 sm:right-auto sm:w-[480px] dashboard-card p-3 rounded-2xl shadow-2xl z-40 border border-slate-300 dark:border-slate-700 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md"
                       >
                         <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-200/80 dark:border-slate-800">
                           <div className="flex items-center gap-2">
@@ -1096,7 +1194,7 @@ export default function ChatTab({ user, projects, showToast }: ChatTabProps) {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4"
+            className="fixed inset-0 z-[70] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4"
             onClick={() => setShowCreateModal(false)}
           >
             <motion.div
@@ -1104,7 +1202,7 @@ export default function ChatTab({ user, projects, showToast }: ChatTabProps) {
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.95, y: 10 }}
               onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-md intellecta-card p-6 sm:p-8 shadow-2xl dark:text-slate-100"
+              className="w-full max-w-md dashboard-card p-6 sm:p-8 shadow-2xl dark:text-slate-100"
             >
               <div className="flex items-center justify-between pb-4 border-b border-slate-200/80 dark:border-slate-700 mb-5">
                 <div>

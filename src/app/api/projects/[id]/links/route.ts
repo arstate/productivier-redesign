@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
+import { requireAuth } from "@/lib/auth";
+import { validateHttpUrl } from "@/lib/validation";
 
 // GET /api/projects/[id]/links - List all resource links for a project
 export async function GET(
@@ -7,6 +9,9 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const auth = requireAuth(req);
+    if ("error" in auth) return auth.error;
+
     const { id } = await params;
     const projectId = Number(id);
     if (!projectId) {
@@ -33,6 +38,9 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const auth = requireAuth(req);
+    if ("error" in auth) return auth.error;
+
     const { id } = await params;
     const projectId = Number(id);
     if (!projectId) {
@@ -44,6 +52,10 @@ export async function POST(
 
     if (!title || !title.trim() || !url || !url.trim()) {
       return NextResponse.json({ error: "Judul dan URL tautan wajib diisi" }, { status: 400 });
+    }
+    const safeUrl = validateHttpUrl(String(url));
+    if (!safeUrl) {
+      return NextResponse.json({ error: "URL tautan tidak valid (harus http:// atau https://)" }, { status: 400 });
     }
 
     // Auto-detect platform if not provided or set to other
@@ -61,7 +73,7 @@ export async function POST(
       VALUES (?, ?, ?, ?)
     `);
 
-    const result = stmt.run(projectId, title.trim(), url.trim(), detectedPlatform);
+    const result = stmt.run(projectId, title.trim(), safeUrl, detectedPlatform);
     const newLink = db
       .prepare("SELECT id, project_id, title, url, platform, created_at FROM project_links WHERE id = ?")
       .get(result.lastInsertRowid);
@@ -79,6 +91,9 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const auth = requireAuth(req);
+    if ("error" in auth) return auth.error;
+
     const { id } = await params;
     const projectId = Number(id);
     const url = new URL(req.url);

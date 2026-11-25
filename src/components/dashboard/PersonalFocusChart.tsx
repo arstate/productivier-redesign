@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
-import { ArrowUpRight, Flame, TrendingUp } from "lucide-react";
+import { ArrowUpRight, TrendingUp } from "lucide-react";
+import { RealisasiType, UserType } from "@/types";
 
 interface FocusDayPoint {
   dayShort: string;
@@ -9,11 +10,15 @@ interface FocusDayPoint {
   dateLabel: string;
   score: number; // 0 to 300 Pts
   efficiency: number; // 0 to 100%
+  count: number;
   status: string;
   isToday?: boolean;
 }
 
 interface PersonalFocusChartProps {
+  user?: UserType;
+  viewMode?: "pribadi" | "tim";
+  realisasi?: RealisasiType[];
   tren7Hari?: Array<{
     tanggal: string;
     jumlah_laporan: number;
@@ -27,13 +32,30 @@ const generateDynamic7Days = (
     tanggal: string;
     jumlah_laporan: number;
     rata_persen: number;
-  }>
+  }>,
+  user?: UserType,
+  viewMode?: "pribadi" | "tim",
+  realisasi?: RealisasiType[]
 ): FocusDayPoint[] => {
   const dayNames = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"];
   const fullNames = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
   const months = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
   const now = new Date();
   const points: FocusDayPoint[] = [];
+
+  // Build strict per-day map from user's own tasks in personal mode
+  const usePersonalRealisasi = viewMode === "pribadi" && user && Array.isArray(realisasi);
+  const personalDayMap = new Map<string, { sum: number; count: number }>();
+  if (usePersonalRealisasi && realisasi && user) {
+    for (const r of realisasi) {
+      if (r.user_id !== user.id && r.assigned_to_user_id !== user.id) continue;
+      if (r.realisasi === 0 && r.assigned_by_user_id) continue;
+      const cur = personalDayMap.get(r.tanggal) || { sum: 0, count: 0 };
+      cur.sum += Number(r.persentase) || 0;
+      cur.count += 1;
+      personalDayMap.set(r.tanggal, cur);
+    }
+  }
 
   for (let i = 6; i >= 0; i--) {
     const d = new Date(now);
@@ -44,16 +66,26 @@ const generateDynamic7Days = (
     const monthStr = months[d.getMonth()];
     const isToday = i === 0;
 
-    const matched = tren7Hari?.find((t) => t.tanggal === dateStr);
-    let eff = matched
-      ? Math.min(100, Math.round(matched.rata_persen || 0))
-      : isToday
-      ? 75
-      : 65 + ((6 - i) * 3);
-    if (matched && matched.jumlah_laporan === 0) eff = 0;
-    const score = Math.round((eff / 100) * 280);
+    let eff = 0;
+    let count = 0;
+
+    if (usePersonalRealisasi) {
+      const stats = personalDayMap.get(dateStr);
+      if (stats && stats.count > 0) {
+        eff = Math.min(100, Math.round(stats.sum / stats.count));
+        count = stats.count;
+      }
+    } else {
+      const matched = tren7Hari?.find((t) => t.tanggal === dateStr);
+      if (matched && matched.jumlah_laporan > 0) {
+        eff = Math.min(100, Math.round(matched.rata_persen || 0));
+        count = matched.jumlah_laporan;
+      }
+    }
+
+    const score = Math.round((eff / 100) * 300);
     const status =
-      eff >= 85 ? "🔥 Fokus Tinggi" : eff >= 70 ? "⚡ Produktif" : eff > 0 ? "✓ Stabil" : "Belum Ada Laporan";
+      eff >= 85 ? "Fokus Tinggi" : eff >= 70 ? "Produktif" : eff > 0 ? "Stabil" : "Belum Ada Input";
 
     points.push({
       dayShort: dayNames[dayIdx],
@@ -61,6 +93,7 @@ const generateDynamic7Days = (
       dateLabel: `${dateNum} ${monthStr}`,
       score,
       efficiency: eff,
+      count,
       status,
       isToday,
     });
@@ -70,12 +103,25 @@ const generateDynamic7Days = (
 };
 
 export default function PersonalFocusChart({
+  user,
+  viewMode,
+  realisasi,
   tren7Hari,
   onGoReports,
 }: PersonalFocusChartProps) {
   const dataPoints: FocusDayPoint[] = useMemo(() => {
-    return generateDynamic7Days(tren7Hari);
-  }, [tren7Hari]);
+    return generateDynamic7Days(tren7Hari, user, viewMode, realisasi);
+  }, [tren7Hari, user, viewMode, realisasi]);
+
+  const activeDaysCount = dataPoints.filter((d) => d.count > 0).length;
+  const todayScore = dataPoints[dataPoints.length - 1]?.score ?? 0;
+  const avgPrevEff = useMemo(() => {
+    const prev = dataPoints.slice(0, 6).filter((d) => d.count > 0);
+    if (prev.length === 0) return 0;
+    return Math.round(prev.reduce((s, d) => s + d.efficiency, 0) / prev.length);
+  }, [dataPoints]);
+  const todayEff = dataPoints[dataPoints.length - 1]?.efficiency ?? 0;
+  const deltaEff = avgPrevEff > 0 ? todayEff - avgPrevEff : 0;
 
   // Default hovered index is today (last point)
   const [activeIdx, setActiveIdx] = useState<number>(dataPoints.length - 1);
@@ -128,7 +174,7 @@ export default function PersonalFocusChart({
   const activeCoord = coords[activeIdx] || coords[coords.length - 1];
 
   return (
-    <article className="lg:col-span-7 intellecta-card p-6 flex flex-col justify-between min-h-[310px] dark:text-slate-100">
+    <article className="lg:col-span-7 dashboard-card p-6 flex flex-col justify-between min-h-[310px] dark:text-slate-100">
       {/* Header Row with Today's Metric & Trend */}
       <div className="flex items-start justify-between pb-2">
         <div>
@@ -136,15 +182,21 @@ export default function PersonalFocusChart({
             <h2 className="font-bold text-lg text-[#18181B] dark:text-white">
               Summary Energi Diri
             </h2>
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#D2F27C]/40 text-slate-900 dark:text-[#D2F27C] text-[10px] font-extrabold">
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#D2F27C]/40 text-slate-900 dark:text-[#D2F27C] text-[11px] font-extrabold">
               <TrendingUp className="w-3 h-3" />
-              <span>+14% vs Minggu Lalu</span>
+              <span>
+                {activeDaysCount > 0
+                  ? deltaEff !== 0
+                    ? `${deltaEff > 0 ? "+" : ""}${deltaEff}% vs Rata-rata`
+                    : `${activeDaysCount} hari aktif`
+                  : "Belum ada aktivitas"}
+              </span>
             </span>
           </div>
           <p className="text-xs text-[#71717A] dark:text-slate-400 mt-0.5">
             Skor Fokus Harian (0–300 Pts) ·{" "}
-            <strong className="text-slate-900 dark:text-white">
-              Hari Ini: {dataPoints[dataPoints.length - 1]?.score || 203} Pts
+            <strong className="text-slate-900 dark:text-white tabular-nums">
+              Hari Ini: {todayScore} Pts
             </strong>
           </p>
         </div>

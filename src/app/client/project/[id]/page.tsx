@@ -1,5 +1,7 @@
 import React from "react";
+import { cookies } from "next/headers";
 import { getDb } from "@/lib/db";
+import { SESSION_COOKIE_NAME, getSessionUserFromToken } from "@/lib/auth";
 import ProductivierLogo from "@/components/ui/ProductivierLogo";
 import ClientNotesSection from "@/components/client/ClientNotesSection";
 import CopyPortalButton from "@/components/client/CopyPortalButton";
@@ -24,18 +26,20 @@ import {
 
 interface ClientProjectPageProps {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ token?: string }>;
 }
 
 export const dynamic = "force-dynamic";
 
-export default async function ClientProjectPage({ params }: ClientProjectPageProps) {
+export default async function ClientProjectPage({ params, searchParams }: ClientProjectPageProps) {
   const { id } = await params;
+  const { token } = await searchParams;
   const projectId = Number(id);
 
   if (!projectId) {
     return (
       <div className="min-h-screen bg-[#ECEEF3] flex items-center justify-center p-6 text-slate-800">
-        <div className="intellecta-card p-8 text-center max-w-md">
+        <div className="dashboard-card p-8 text-center max-w-md">
           <h2 className="text-xl font-bold mb-2">Proyek Tidak Ditemukan</h2>
           <p className="text-xs text-slate-500">Tautan proyek yang Anda tuju tidak valid.</p>
         </div>
@@ -53,14 +57,46 @@ export default async function ClientProjectPage({ params }: ClientProjectPagePro
       LEFT JOIN users u ON p.pic_id = u.id
       WHERE p.id = ?
     `)
-    .get(projectId) as any;
+    .get(projectId) as
+    | {
+        id: number;
+        nama_proyek: string;
+        divisi: string;
+        target_total: number;
+        satuan: string;
+        status: string;
+        deadline?: string;
+        share_token?: string;
+        pic_nama?: string;
+        pic_avatar?: string;
+        pic_divisi?: string;
+        total_realisasi: number;
+        jumlah_laporan: number;
+      }
+    | undefined;
 
   if (!project) {
     return (
       <div className="min-h-screen bg-[#ECEEF3] flex items-center justify-center p-6 text-slate-800">
-        <div className="intellecta-card p-8 text-center max-w-md">
+        <div className="dashboard-card p-8 text-center max-w-md">
           <h2 className="text-xl font-bold mb-2">Proyek Tidak Ditemukan</h2>
           <p className="text-xs text-slate-500">Proyek dengan ID ini tidak terdaftar atau sudah diarsipkan.</p>
+        </div>
+      </div>
+    );
+  }
+
+  const cookieStore = await cookies();
+  const sessionUser = getSessionUserFromToken(cookieStore.get(SESSION_COOKIE_NAME)?.value);
+  const validToken = Boolean(project.share_token && token && String(token).trim() === String(project.share_token));
+  if (!validToken && !sessionUser) {
+    return (
+      <div className="min-h-screen bg-[#ECEEF3] flex items-center justify-center p-6 text-slate-800">
+        <div className="dashboard-card p-8 text-center max-w-md space-y-2">
+          <h2 className="text-xl font-bold">Tautan Portal Terbatas</h2>
+          <p className="text-xs text-slate-500 leading-relaxed">
+            Portal proyek ini memerlukan token akses resmi dari tim pengelola atau sesi tim yang terautentikasi.
+          </p>
         </div>
       </div>
     );
@@ -77,12 +113,25 @@ export default async function ClientProjectPage({ params }: ClientProjectPagePro
   // Fetch project links
   const links = db
     .prepare("SELECT * FROM project_links WHERE project_id = ? ORDER BY id ASC")
-    .all(projectId) as any[];
+    .all(projectId) as Array<{ id: number; title: string; url: string; platform: string }>;
 
   // Fetch verified task logs
   const realisasiLogs = db
     .prepare("SELECT * FROM realisasi WHERE project_id = ? ORDER BY tanggal DESC, id DESC LIMIT 20")
-    .all(projectId) as any[];
+    .all(projectId) as Array<{
+      id: number;
+      aktivitas: string;
+      nama: string;
+      tanggal: string;
+      persentase: number;
+      target: number;
+      realisasi: number;
+      satuan: string;
+      status: string;
+      kendala?: string;
+      solusi?: string;
+      bukti_foto_url?: string;
+    }>;
 
   // Fetch client feedback/notes
   const rawClientNotes = db
@@ -92,7 +141,7 @@ export default async function ClientProjectPage({ params }: ClientProjectPagePro
       WHERE project_id = ?
       ORDER BY created_at DESC, id DESC
     `)
-    .all(projectId) as any[];
+    .all(projectId) as Array<Record<string, unknown>>;
 
   const clientNotes = rawClientNotes.map((r) => ({
     id: Number(r.id),
@@ -176,7 +225,7 @@ export default async function ClientProjectPage({ params }: ClientProjectPagePro
                 <span className="font-extrabold text-sm sm:text-base tracking-tight block text-slate-900 leading-tight">
                   Productivier Client Portal
                 </span>
-                <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-slate-100 text-slate-600 border border-slate-200/60">
+                <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-black uppercase tracking-wider bg-slate-100 text-slate-600 border border-slate-200/60">
                   Enterprise Sync
                 </span>
               </div>
@@ -209,7 +258,7 @@ export default async function ClientProjectPage({ params }: ClientProjectPagePro
         {/* HERO BENTO HEADER (7:5 SPLIT) */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-6">
           {/* LEFT HERO CARD: TITLE, DIVISION, PIC & WHATSAPP CTA (7 COLS) */}
-          <div className="lg:col-span-7 intellecta-card p-6 sm:p-8 bg-white/95 backdrop-blur-md shadow-sm border border-slate-200/80 flex flex-col justify-between space-y-6">
+          <div className="lg:col-span-7 dashboard-card p-6 sm:p-8 bg-white/95 backdrop-blur-md shadow-sm border border-slate-200/80 flex flex-col justify-between space-y-6">
             <div className="space-y-3">
               <div className="flex items-center gap-2.5 flex-wrap">
                 <span className="px-3 py-1 rounded-full bg-slate-100 text-slate-700 text-xs font-bold">
@@ -299,7 +348,7 @@ export default async function ClientProjectPage({ params }: ClientProjectPagePro
           </div>
 
           {/* RIGHT HERO CARD: CIRCULAR SPEEDOMETER VELOCITY PROGRESS GAUGE (5 COLS) */}
-          <div className="lg:col-span-5 intellecta-card p-6 sm:p-8 bg-white/95 backdrop-blur-md shadow-sm border border-slate-200/80 flex flex-col justify-between space-y-5">
+          <div className="lg:col-span-5 dashboard-card p-6 sm:p-8 bg-white/95 backdrop-blur-md shadow-sm border border-slate-200/80 flex flex-col justify-between space-y-5">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div className="flex items-center gap-2">
                 <Gauge className="w-4 h-4 text-slate-700" />
@@ -373,7 +422,7 @@ export default async function ClientProjectPage({ params }: ClientProjectPagePro
                   <span className="text-3xl font-black text-slate-900 tracking-tight tabular-nums leading-none">
                     {persentase}%
                   </span>
-                  <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider mt-1">
+                  <span className="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider mt-1">
                     Velocity Capaian
                   </span>
                 </div>
@@ -442,7 +491,7 @@ export default async function ClientProjectPage({ params }: ClientProjectPagePro
           {/* LEFT COLUMN: VAULT & WORK LOGS TIMELINE (7 COLS) */}
           <div className="lg:col-span-7 space-y-5 sm:space-y-6">
             {/* A. CLOUD RESOURCE & DELIVERABLES VAULT */}
-            <div className="intellecta-card p-6 sm:p-7 bg-white/95 backdrop-blur-md shadow-sm border border-slate-200/80 space-y-4">
+            <div className="dashboard-card p-6 sm:p-7 bg-white/95 backdrop-blur-md shadow-sm border border-slate-200/80 space-y-4">
               <div className="flex items-center justify-between pb-3.5 border-b border-slate-200/80">
                 <div>
                   <div className="flex items-center gap-2">
@@ -479,7 +528,7 @@ export default async function ClientProjectPage({ params }: ClientProjectPagePro
                       <div className="min-w-0 space-y-1.5">
                         <div className="flex items-center gap-1.5">
                           <span
-                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider ${badge.badgeColor}`}
+                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-black uppercase tracking-wider ${badge.badgeColor}`}
                           >
                             <Icon className="w-3 h-3" />
                             <span>{badge.label}</span>
@@ -509,7 +558,7 @@ export default async function ClientProjectPage({ params }: ClientProjectPagePro
             </div>
 
             {/* B. VERIFIED WORK LOGS TIMELINE FEED */}
-            <div className="intellecta-card p-6 sm:p-7 bg-white/95 backdrop-blur-md shadow-sm border border-slate-200/80 space-y-4">
+            <div className="dashboard-card p-6 sm:p-7 bg-white/95 backdrop-blur-md shadow-sm border border-slate-200/80 space-y-4">
               <div className="flex items-center justify-between pb-3.5 border-b border-slate-200/80">
                 <div>
                   <div className="flex items-center gap-2">
@@ -616,10 +665,14 @@ export default async function ClientProjectPage({ params }: ClientProjectPagePro
           {/* RIGHT COLUMN: COLLABORATION & SLA ASSURANCE (5 COLS) */}
           <div className="lg:col-span-5 space-y-5 sm:space-y-6">
             {/* A. CLIENT NOTES & FEEDBACK SECTION */}
-            <ClientNotesSection projectId={projectId} initialNotes={clientNotes} />
+            <ClientNotesSection
+              projectId={projectId}
+              shareToken={typeof project.share_token === "string" ? project.share_token : ""}
+              initialNotes={clientNotes}
+            />
 
             {/* B. CLIENT TRANSPARENCY & SLA ASSURANCE CARD */}
-            <div className="intellecta-card p-6 bg-white/95 backdrop-blur-md shadow-sm border border-slate-200/80 space-y-4">
+            <div className="dashboard-card p-6 bg-white/95 backdrop-blur-md shadow-sm border border-slate-200/80 space-y-4">
               <div className="flex items-center justify-between pb-3 border-b border-slate-200/80">
                 <div className="flex items-center gap-2">
                   <ShieldCheck className="w-5 h-5 text-emerald-600" />

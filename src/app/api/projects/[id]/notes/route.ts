@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
+import { requireAuth } from "@/lib/auth";
 
 // GET /api/projects/[id]/notes - Fetch internal notes linked to this project
 export async function GET(
@@ -7,6 +8,9 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const auth = requireAuth(req);
+    if ("error" in auth) return auth.error;
+
     const { id } = await params;
     const projectId = Number(id);
     if (!projectId) {
@@ -61,6 +65,9 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const auth = requireAuth(req);
+    if ("error" in auth) return auth.error;
+
     const { id } = await params;
     const projectId = Number(id);
     if (!projectId) {
@@ -68,7 +75,7 @@ export async function POST(
     }
 
     const body = await req.json();
-    const { user_id, title, content, tags, pinned, color, checklist } = body;
+    const { title, content, tags, pinned, color, checklist } = body;
 
     if (!title || !title.trim()) {
       return NextResponse.json({ error: "Judul catatan wajib diisi" }, { status: 400 });
@@ -84,7 +91,7 @@ export async function POST(
     `);
 
     const result = stmt.run(
-      user_id ? Number(user_id) : 1,
+      auth.user.id,
       title.trim(),
       (content || "").trim(),
       tagsJson,

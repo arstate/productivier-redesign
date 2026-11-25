@@ -1,11 +1,15 @@
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
+import { requireAuth } from '@/lib/auth';
 
 export async function GET(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const auth = requireAuth(req);
+    if ('error' in auth) return auth.error;
+
     const { id } = await params;
     const groupId = Number(id);
 
@@ -41,10 +45,13 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const auth = requireAuth(req);
+    if ('error' in auth) return auth.error;
+
     const { id } = await params;
     const groupId = Number(id);
     const body = await req.json();
-    const { user_id, added_by_user_id, role = 'member' } = body;
+    const { user_id, role = 'member' } = body;
 
     if (!user_id) {
       return NextResponse.json({ error: 'User ID anggota wajib diisi' }, { status: 400 });
@@ -56,14 +63,10 @@ export async function POST(
       return NextResponse.json({ error: 'Grup tidak ditemukan' }, { status: 404 });
     }
 
-    // Check if requester is group admin or creator or system admin
-    if (added_by_user_id) {
-      const requester = db.prepare('SELECT role FROM chat_group_members WHERE group_id = ? AND user_id = ?').get(groupId, Number(added_by_user_id)) as { role: string } | undefined;
-      const sysUser = db.prepare('SELECT role FROM users WHERE id = ?').get(Number(added_by_user_id)) as { role: string } | undefined;
-      const isAllowed = requester?.role === 'admin' || group.created_by === Number(added_by_user_id) || sysUser?.role === 'admin';
-      if (!isAllowed) {
-        return NextResponse.json({ error: 'Hanya Admin Grup yang dapat menambahkan anggota baru.' }, { status: 403 });
-      }
+    const requesterMember = db.prepare('SELECT role FROM chat_group_members WHERE group_id = ? AND user_id = ?').get(groupId, auth.user.id) as { role: string } | undefined;
+    const isAllowed = requesterMember?.role === 'admin' || group.created_by === auth.user.id || auth.user.role === 'admin';
+    if (!isAllowed) {
+      return NextResponse.json({ error: 'Hanya Admin Grup yang dapat menambahkan anggota baru.' }, { status: 403 });
     }
 
     // Check if already in group
@@ -97,10 +100,13 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const auth = requireAuth(req);
+    if ('error' in auth) return auth.error;
+
     const { id } = await params;
     const groupId = Number(id);
     const body = await req.json();
-    const { target_user_id, role, updated_by_user_id } = body;
+    const { target_user_id, role } = body;
 
     if (!target_user_id || !role) {
       return NextResponse.json({ error: 'Target user dan role baru wajib diisi' }, { status: 400 });
@@ -112,14 +118,10 @@ export async function PATCH(
       return NextResponse.json({ error: 'Grup tidak ditemukan' }, { status: 404 });
     }
 
-    // Check permission
-    if (updated_by_user_id) {
-      const requester = db.prepare('SELECT role FROM chat_group_members WHERE group_id = ? AND user_id = ?').get(groupId, Number(updated_by_user_id)) as { role: string } | undefined;
-      const sysUser = db.prepare('SELECT role FROM users WHERE id = ?').get(Number(updated_by_user_id)) as { role: string } | undefined;
-      const isAllowed = requester?.role === 'admin' || group.created_by === Number(updated_by_user_id) || sysUser?.role === 'admin';
-      if (!isAllowed) {
-        return NextResponse.json({ error: 'Hanya Admin Grup yang dapat mengubah role anggota.' }, { status: 403 });
-      }
+    const requesterMember = db.prepare('SELECT role FROM chat_group_members WHERE group_id = ? AND user_id = ?').get(groupId, auth.user.id) as { role: string } | undefined;
+    const isAllowed = requesterMember?.role === 'admin' || group.created_by === auth.user.id || auth.user.role === 'admin';
+    if (!isAllowed) {
+      return NextResponse.json({ error: 'Hanya Admin Grup yang dapat mengubah role anggota.' }, { status: 403 });
     }
 
     // Cannot demote group creator
@@ -153,11 +155,13 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const auth = requireAuth(req);
+    if ('error' in auth) return auth.error;
+
     const { id } = await params;
     const groupId = Number(id);
     const { searchParams } = new URL(req.url);
     const targetUserId = searchParams.get('target_user_id');
-    const requesterUserId = searchParams.get('requester_user_id');
 
     if (!targetUserId) {
       return NextResponse.json({ error: 'Target user ID wajib disertakan' }, { status: 400 });
@@ -169,12 +173,11 @@ export async function DELETE(
       return NextResponse.json({ error: 'Grup tidak ditemukan' }, { status: 404 });
     }
 
-    const isSelfLeaving = Number(targetUserId) === Number(requesterUserId);
+    const isSelfLeaving = Number(targetUserId) === auth.user.id;
 
-    if (!isSelfLeaving && requesterUserId) {
-      const requester = db.prepare('SELECT role FROM chat_group_members WHERE group_id = ? AND user_id = ?').get(groupId, Number(requesterUserId)) as { role: string } | undefined;
-      const sysUser = db.prepare('SELECT role FROM users WHERE id = ?').get(Number(requesterUserId)) as { role: string } | undefined;
-      const isAllowed = requester?.role === 'admin' || group.created_by === Number(requesterUserId) || sysUser?.role === 'admin';
+    if (!isSelfLeaving) {
+      const requesterMember = db.prepare('SELECT role FROM chat_group_members WHERE group_id = ? AND user_id = ?').get(groupId, auth.user.id) as { role: string } | undefined;
+      const isAllowed = requesterMember?.role === 'admin' || group.created_by === auth.user.id || auth.user.role === 'admin';
       if (!isAllowed) {
         return NextResponse.json({ error: 'Hanya Admin Grup yang dapat mengeluarkan anggota.' }, { status: 403 });
       }

@@ -1,44 +1,64 @@
 import { NextResponse } from 'next/server';
 import { getDb, hashPassword } from '@/lib/db';
+import { requireAuth, requireAdmin } from '@/lib/auth';
 
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const auth = requireAuth(req);
+    if ('error' in auth) return auth.error;
+
     const { id } = await params;
     const userId = Number(id);
-    const body = await req.json();
-    const { nama, divisi, password, role, avatar_url, gender, phone, current_user_id } = body;
-    const db = getDb();
-
-    // Access control check
-    const headerUserId = req.headers.get('x-user-id');
-    const requesterId = headerUserId ? Number(headerUserId) : (current_user_id ? Number(current_user_id) : null);
-
-    if (requesterId) {
-      const requester = db.prepare('SELECT id, role FROM users WHERE id = ?').get(requesterId) as { id: number; role: string } | undefined;
-      if (!requester) {
-        return NextResponse.json({ error: 'Pengguna yang melakukan permintaan tidak ditemukan' }, { status: 401 });
-      }
-      // Non-admin can only update their own profile and cannot change their role
-      if (requester.id !== userId && requester.role !== 'admin') {
-        return NextResponse.json({ error: 'Akses ditolak: Anda tidak memiliki izin untuk mengubah data pengguna ini.' }, { status: 403 });
-      }
+    if (!Number.isInteger(userId) || userId <= 0) {
+      return NextResponse.json({ error: 'ID pengguna tidak valid' }, { status: 400 });
     }
+
+    // Non-admin can only update their own profile
+    if (auth.user.id !== userId && auth.user.role !== 'admin') {
+      return NextResponse.json(
+        { error: 'Akses ditolak: Anda tidak memiliki izin untuk mengubah data pengguna ini.' },
+        { status: 403 }
+      );
+    }
+
+    const body = await req.json();
+    const { nama, divisi, password, role, avatar_url, gender, phone } = body;
+    const db = getDb();
 
     const existing = db.prepare('SELECT * FROM users WHERE id = ?').get(userId) as Record<string, string> | undefined;
     if (!existing) {
       return NextResponse.json({ error: 'User tidak ditemukan' }, { status: 404 });
     }
 
-    const newPassword = password && password.trim() !== '' ? hashPassword(password.trim()) : existing.password;
-    const newPhone = phone !== undefined ? phone.trim() : (existing.phone || '');
+    // Only admin can promote/demote roles
+    let nextRole = existing.role === 'admin' ? 'admin' : 'karyawan';
+    if (role !== undefined) {
+      if (auth.user.role !== 'admin' && role !== existing.role) {
+        return NextResponse.json(
+          { error: 'Akses ditolak: Hanya Leader / Admin yang dapat mengubah peran pengguna.' },
+          { status: 403 }
+        );
+      }
+      if (auth.user.role === 'admin') {
+        nextRole = role === 'admin' ? 'admin' : 'karyawan';
+      }
+    }
+
+    const cleanPassword = typeof password === 'string' && password.trim() !== '' ? password.trim() : null;
+    if (cleanPassword && cleanPassword.length < 4) {
+      return NextResponse.json({ error: 'Password minimal 4 karakter.' }, { status: 400 });
+    }
+    const newPassword = cleanPassword ? hashPassword(cleanPassword) : existing.password;
+    const newPhone = phone !== undefined ? String(phone).trim().slice(0, 24) : (existing.phone || '');
+    const nextGender = gender === 'female' ? 'female' : gender === 'male' ? 'male' : (existing.gender || 'male');
 
     db.prepare('UPDATE users SET nama = ?, divisi = ?, password = ?, role = ?, avatar_url = ?, gender = ?, phone = ? WHERE id = ?').run(
-      nama !== undefined ? nama.trim() : existing.nama,
-      divisi !== undefined ? divisi.trim() : existing.divisi,
+      nama !== undefined ? String(nama).trim().slice(0, 100) : existing.nama,
+      divisi !== undefined ? String(divisi).trim().slice(0, 80) : existing.divisi,
       newPassword,
-      role !== undefined ? role : existing.role,
-      avatar_url !== undefined ? avatar_url : existing.avatar_url,
-      gender !== undefined ? gender : (existing.gender || 'male'),
+      nextRole,
+      avatar_url !== undefined ? String(avatar_url).slice(0, 2048) : existing.avatar_url,
+      nextGender,
       newPhone,
       userId
     );
@@ -53,22 +73,15 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
 
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const auth = requireAdmin(req);
+    if ('error' in auth) return auth.error;
+
     const { id } = await params;
     const userId = Number(id);
-    const db = getDb();
-
-    // Access control check
-    const headerUserId = req.headers.get('x-user-id');
-    const { searchParams } = new URL(req.url);
-    const queryUserId = searchParams.get('user_id');
-    const requesterId = headerUserId ? Number(headerUserId) : (queryUserId ? Number(queryUserId) : null);
-
-    if (requesterId) {
-      const requester = db.prepare('SELECT id, role FROM users WHERE id = ?').get(requesterId) as { id: number; role: string } | undefined;
-      if (!requester || requester.role !== 'admin') {
-        return NextResponse.json({ error: 'Akses ditolak: Hanya Leader / Admin yang dapat menghapus akun.' }, { status: 403 });
-      }
+    if (!Number.isInteger(userId) || userId <= 0) {
+      return NextResponse.json({ error: 'ID pengguna tidak valid' }, { status: 400 });
     }
+    const db = getDb();
 
     const target = db.prepare('SELECT username FROM users WHERE id = ?').get(userId) as { username: string } | undefined;
     if (!target) {
@@ -77,6 +90,14 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
 
     if (target.username === 'fifa') {
       return NextResponse.json({ error: 'Akun utama fifa tidak bisa dihapus.' }, { status: 403 });
+    }
+
+    // Transfer ownership of any chat groups created by the departing user to an admin (so ON DELETE CASCADE won't wipe team chat history)
+    const fallbackAdmin = db.prepare("SELECT id FROM users WHERE role = 'admin' AND id != ? ORDER BY id ASC LIMIT 1").get(userId) as
+      | { id: number }
+      | undefined;
+    if (fallbackAdmin) {
+      db.prepare('UPDATE chat_groups SET created_by = ? WHERE created_by = ?').run(fallbackAdmin.id, userId);
     }
 
     db.prepare('DELETE FROM users WHERE id = ?').run(userId);

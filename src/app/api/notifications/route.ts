@@ -1,10 +1,15 @@
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
+import { requireAuth } from '@/lib/auth';
 
 export async function GET(req: Request) {
   try {
+    const auth = requireAuth(req);
+    if ('error' in auth) return auth.error;
+
     const { searchParams } = new URL(req.url);
-    const userId = searchParams.get('user_id');
+    const requestedUserId = searchParams.get('user_id');
+    const userId = auth.user.role === 'admin' && requestedUserId ? Number(requestedUserId) : auth.user.id;
     const type = searchParams.get('type');
     const unreadOnly = searchParams.get('unread_only') === 'true';
 
@@ -15,7 +20,7 @@ export async function GET(req: Request) {
 
     if (userId) {
       query += ' AND (user_id = ? OR user_id IS NULL)';
-      params.push(Number(userId));
+      params.push(userId);
     }
 
     if (type && type !== 'all') {
@@ -65,6 +70,9 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
+    const auth = requireAuth(req);
+    if ('error' in auth) return auth.error;
+
     const body = await req.json();
     const { user_id, title, message, type, action_url, payload_json } = body;
 
@@ -97,21 +105,26 @@ export async function POST(req: Request) {
 
 export async function PATCH(req: Request) {
   try {
+    const auth = requireAuth(req);
+    if ('error' in auth) return auth.error;
+
     const body = await req.json();
-    const { id, mark_all_read, user_id } = body;
+    const { id, mark_all_read } = body;
 
     const db = getDb();
 
     if (mark_all_read) {
-      if (user_id) {
-        db.prepare('UPDATE notifications SET is_read = 1 WHERE user_id = ? OR user_id IS NULL').run(Number(user_id));
-      } else {
-        db.prepare('UPDATE notifications SET is_read = 1').run();
-      }
+      db.prepare('UPDATE notifications SET is_read = 1 WHERE user_id = ? OR user_id IS NULL').run(auth.user.id);
       return NextResponse.json({ success: true, message: 'Semua notifikasi ditandai dibaca' });
     }
 
     if (id) {
+      const existing = db.prepare('SELECT user_id FROM notifications WHERE id = ?').get(Number(id)) as
+        | { user_id: number | null }
+        | undefined;
+      if (existing && existing.user_id && existing.user_id !== auth.user.id && auth.user.role !== 'admin') {
+        return NextResponse.json({ error: 'Akses ditolak' }, { status: 403 });
+      }
       db.prepare('UPDATE notifications SET is_read = 1 WHERE id = ?').run(Number(id));
       return NextResponse.json({ success: true, message: 'Notifikasi ditandai dibaca' });
     }
@@ -125,6 +138,9 @@ export async function PATCH(req: Request) {
 
 export async function DELETE(req: Request) {
   try {
+    const auth = requireAuth(req);
+    if ('error' in auth) return auth.error;
+
     const { searchParams } = new URL(req.url);
     const id = searchParams.get('id');
 
@@ -133,6 +149,12 @@ export async function DELETE(req: Request) {
     }
 
     const db = getDb();
+    const existing = db.prepare('SELECT user_id FROM notifications WHERE id = ?').get(Number(id)) as
+      | { user_id: number | null }
+      | undefined;
+    if (existing && existing.user_id && existing.user_id !== auth.user.id && auth.user.role !== 'admin') {
+      return NextResponse.json({ error: 'Akses ditolak' }, { status: 403 });
+    }
     db.prepare('DELETE FROM notifications WHERE id = ?').run(Number(id));
 
     return NextResponse.json({ success: true, message: 'Notifikasi dihapus' });

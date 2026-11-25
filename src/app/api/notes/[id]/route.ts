@@ -1,8 +1,12 @@
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
+import { requireAuth } from '@/lib/auth';
 
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const auth = requireAuth(req);
+    if ('error' in auth) return auth.error;
+
     const { id } = await params;
     const noteId = Number(id);
     const body = await req.json();
@@ -14,18 +18,8 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
       return NextResponse.json({ error: 'Catatan tidak ditemukan' }, { status: 404 });
     }
 
-    // Access control guard
-    const headerUserId = req.headers.get('x-user-id');
-    const requesterId = headerUserId ? Number(headerUserId) : (body.user_id ? Number(body.user_id) : null);
-
-    if (requesterId) {
-      const requester = db.prepare('SELECT id, role FROM users WHERE id = ?').get(requesterId) as { id: number; role: string } | undefined;
-      if (!requester) {
-        return NextResponse.json({ error: 'Pengguna tidak valid' }, { status: 401 });
-      }
-      if (Number(existing.user_id) !== requester.id && requester.role !== 'admin') {
-        return NextResponse.json({ error: 'Akses ditolak: Anda hanya dapat mengubah catatan milik sendiri.' }, { status: 403 });
-      }
+    if (Number(existing.user_id) !== auth.user.id && auth.user.role !== 'admin') {
+      return NextResponse.json({ error: 'Akses ditolak: Anda hanya dapat mengubah catatan milik sendiri.' }, { status: 403 });
     }
 
     const newTitle = title !== undefined ? String(title).trim() : existing.title;
@@ -51,6 +45,9 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
 
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const auth = requireAuth(req);
+    if ('error' in auth) return auth.error;
+
     const { id } = await params;
     const noteId = Number(id);
     const db = getDb();
@@ -60,20 +57,8 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
       return NextResponse.json({ error: 'Catatan tidak ditemukan' }, { status: 404 });
     }
 
-    // Access control guard
-    const headerUserId = req.headers.get('x-user-id');
-    const { searchParams } = new URL(req.url);
-    const queryUserId = searchParams.get('user_id');
-    const requesterId = headerUserId ? Number(headerUserId) : (queryUserId ? Number(queryUserId) : null);
-
-    if (requesterId) {
-      const requester = db.prepare('SELECT id, role FROM users WHERE id = ?').get(requesterId) as { id: number; role: string } | undefined;
-      if (!requester) {
-        return NextResponse.json({ error: 'Pengguna tidak valid' }, { status: 401 });
-      }
-      if (Number(existing.user_id) !== requester.id && requester.role !== 'admin') {
-        return NextResponse.json({ error: 'Akses ditolak: Anda hanya dapat menghapus catatan milik sendiri.' }, { status: 403 });
-      }
+    if (Number(existing.user_id) !== auth.user.id && auth.user.role !== 'admin') {
+      return NextResponse.json({ error: 'Akses ditolak: Anda hanya dapat menghapus catatan milik sendiri.' }, { status: 403 });
     }
 
     db.prepare('DELETE FROM notes WHERE id = ?').run(noteId);

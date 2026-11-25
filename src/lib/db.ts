@@ -185,6 +185,17 @@ function initDb(): DatabaseSync {
       FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS project_members (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_id INTEGER NOT NULL,
+      user_id INTEGER NOT NULL,
+      role TEXT NOT NULL DEFAULT 'member',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      UNIQUE(project_id, user_id)
+    );
+
     CREATE TABLE IF NOT EXISTS project_client_notes (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       project_id INTEGER NOT NULL,
@@ -305,6 +316,30 @@ function initDb(): DatabaseSync {
     // Migration error ignored
   }
 
+  // Realisasi delegation columns
+  try {
+    db.exec(`ALTER TABLE realisasi ADD COLUMN assigned_to_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL;`);
+  } catch {
+    // Column already exists
+  }
+  try {
+    db.exec(`ALTER TABLE realisasi ADD COLUMN assigned_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL;`);
+  } catch {
+    // Column already exists
+  }
+  try {
+    db.exec(`ALTER TABLE realisasi ADD COLUMN deadline TEXT DEFAULT '';`);
+  } catch {
+    // Column already exists
+  }
+
+  // Backfill assigned_to_user_id for existing tasks
+  try {
+    db.exec(`UPDATE realisasi SET assigned_to_user_id = user_id WHERE assigned_to_user_id IS NULL;`);
+  } catch {
+    // Backfill error ignored
+  }
+
   const fifaExists = db.prepare('SELECT id FROM users WHERE username = ?').get('fifa') as { id: number } | undefined;
   if (!fifaExists) {
     db.prepare('INSERT INTO users (username, password, nama, divisi, role, gender) VALUES (?, ?, ?, ?, ?, ?)').run(
@@ -338,8 +373,24 @@ function initDb(): DatabaseSync {
   const p2 = db.prepare('SELECT id FROM projects WHERE id = 2').get();
   if (!p2) {
     db.prepare('INSERT INTO projects (id, nama_proyek, pic_id, divisi, target_total, satuan, status, deadline) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(
-      2, 'Redesign UI Intellecta Clean Slate', fifaId, 'Kreatif', 50, 'Modul', 'aktif', '2026-11-30'
+      2, 'Redesign UI Productivier Clean Slate', fifaId, 'Kreatif', 50, 'Modul', 'aktif', '2026-11-30'
     );
+  }
+
+  // Ensure project_members are populated for all projects
+  try {
+    db.exec(`
+      INSERT OR IGNORE INTO project_members (project_id, user_id, role)
+      SELECT id, pic_id, 'leader' FROM projects WHERE pic_id IS NOT NULL;
+    `);
+    if (tim1Id) {
+      db.prepare(`INSERT OR IGNORE INTO project_members (project_id, user_id, role) VALUES (1, ?, 'member')`).run(tim1Id);
+    }
+    if (tim2Id) {
+      db.prepare(`INSERT OR IGNORE INTO project_members (project_id, user_id, role) VALUES (2, ?, 'member')`).run(tim2Id);
+    }
+  } catch {
+    // Project members migration error ignored
   }
 
   // Seed Realisasi (Tugas) if empty
@@ -437,7 +488,7 @@ function initDb(): DatabaseSync {
     insEvent.run(
       fifaId,
       'Design Research & Wireframing',
-      'Eksplorasi layout Bento grid dan micro-interactions di Figma.',
+      'Eksplorasi tata letak dashboard dan micro-interactions di Figma.',
       todayStr,
       '11:00',
       '12:30',
@@ -530,7 +581,7 @@ function initDb(): DatabaseSync {
 
     insLink.run(1, 'Aset Desain & Footage Video', 'https://drive.google.com/drive/folders/sample-brand-assets', 'drive');
     insLink.run(1, 'SOP & Workspace Dokumen', 'https://notion.so/workspace/operasional-sop', 'notion');
-    insLink.run(2, 'Master Canvas Figma GSM v2.5', 'https://figma.com/file/sample-intellecta-clean-slate', 'figma');
+    insLink.run(2, 'Master Canvas Figma GSM v2.5', 'https://figma.com/file/sample-productivier-workspace', 'figma');
     insLink.run(2, 'Staging Live Preview', 'http://localhost:3007', 'github');
     insLink.run(2, 'Spreadsheet Rekap Konten', 'https://docs.google.com/spreadsheets/sample-data', 'sheets');
   }
@@ -668,7 +719,7 @@ function initDb(): DatabaseSync {
     insNotif.run(
       fifaId,
       'Pengingat Deadline Tugas',
-      'Deadline proyek "Redesign UI Intellecta Clean Slate" mendekati tanggal 30 Nov 2026.',
+      'Deadline proyek "Redesign UI Productivier Clean Slate" mendekati tanggal 30 Nov 2026.',
       'task',
       '/?tab=projects',
       JSON.stringify({ project_id: 2, deadline: '2026-11-30' }),
@@ -711,6 +762,127 @@ function initDb(): DatabaseSync {
     }
   } catch {
     // ignore
+  }
+
+  // Client portal share_token column & backfill
+  try {
+    db.exec(`ALTER TABLE projects ADD COLUMN share_token TEXT DEFAULT '';`);
+  } catch {
+    // Column already exists
+  }
+  try {
+    const missingTokenProjects = db
+      .prepare("SELECT id FROM projects WHERE share_token IS NULL OR TRIM(share_token) = ''")
+      .all() as Array<{ id: number }>;
+    const updToken = db.prepare('UPDATE projects SET share_token = ? WHERE id = ?');
+    for (const row of missingTokenProjects) {
+      updToken.run(crypto.randomBytes(12).toString('hex'), row.id);
+    }
+  } catch {
+    // ignore
+  }
+
+  // One-time data hygiene, role normalization, branding purge, and legacy project->chat group backfill
+  try {
+    db.exec(`CREATE TABLE IF NOT EXISTS _migrations (key TEXT PRIMARY KEY, applied_at DATETIME DEFAULT CURRENT_TIMESTAMP);`);
+    const alreadyMigrated = db.prepare('SELECT key FROM _migrations WHERE key = ?').get('hygiene_and_backfill_v2');
+    if (!alreadyMigrated) {
+      // 1. Normalize invalid user roles (e.g. 'Lead Developer' -> 'karyawan')
+      db.prepare("UPDATE users SET role = 'karyawan' WHERE role NOT IN ('admin', 'karyawan')").run();
+
+      // 2. Rename legacy branding in existing rows
+      db.prepare("UPDATE projects SET nama_proyek = REPLACE(nama_proyek, 'Intellecta', 'Productivier') WHERE nama_proyek LIKE '%Intellecta%'").run();
+      db.prepare("UPDATE notifications SET message = REPLACE(message, 'Intellecta', 'Productivier') WHERE message LIKE '%Intellecta%'").run();
+      db.prepare("UPDATE chat_groups SET name = REPLACE(name, 'Intellecta', 'Productivier') WHERE name LIKE '%Intellecta%'").run();
+      db.prepare("UPDATE project_links SET url = REPLACE(url, 'intellecta', 'productivier') WHERE LOWER(url) LIKE '%intellecta%'").run();
+      db.prepare("UPDATE calendar_events SET description = REPLACE(description, 'Bento grid', 'tata letak dashboard') WHERE description LIKE '%Bento grid%'").run();
+
+      // 3. Remove dirty placeholder/test realisasi rows ('-' / empty) & junk notes/chat
+      db.prepare("DELETE FROM realisasi WHERE TRIM(aktivitas) IN ('', '-')").run();
+      db.prepare("DELETE FROM notes WHERE LOWER(TRIM(title)) IN ('tes', 'test', 'wawawaw', 'cok')").run();
+      db.prepare("DELETE FROM chat_messages WHERE LOWER(message) LIKE '%jancok%'").run();
+
+      // 4. Remove junk 'QWQW' project and duplicate empty 'Redesign Landing Page MVP' if empty
+      const junkProjects = db.prepare("SELECT id FROM projects WHERE UPPER(TRIM(nama_proyek)) = 'QWQW'").all() as Array<{ id: number }>;
+      for (const jp of junkProjects) {
+        db.prepare('DELETE FROM project_members WHERE project_id = ?').run(jp.id);
+        db.prepare('DELETE FROM chat_group_projects WHERE project_id = ?').run(jp.id);
+        db.prepare('DELETE FROM projects WHERE id = ?').run(jp.id);
+      }
+
+      const dupLanding = db
+        .prepare("SELECT id FROM projects WHERE nama_proyek = 'Redesign Landing Page MVP' ORDER BY id ASC")
+        .all() as Array<{ id: number }>;
+      if (dupLanding.length > 1) {
+        for (const dup of dupLanding.slice(1)) {
+          const hasWork = (db.prepare('SELECT COUNT(*) as c FROM realisasi WHERE project_id = ?').get(dup.id) as { c: number }).c;
+          const hasLinks = (db.prepare('SELECT COUNT(*) as c FROM project_links WHERE project_id = ?').get(dup.id) as { c: number }).c;
+          if (hasWork === 0 && hasLinks === 0) {
+            db.prepare('DELETE FROM project_members WHERE project_id = ?').run(dup.id);
+            db.prepare('DELETE FROM chat_group_projects WHERE project_id = ?').run(dup.id);
+            db.prepare('DELETE FROM projects WHERE id = ?').run(dup.id);
+          }
+        }
+      }
+
+      // 5. Backfill project_members & auto-create chat groups for every existing project lacking one
+      const remainingProjects = db.prepare('SELECT id, nama_proyek, pic_id FROM projects ORDER BY id ASC').all() as Array<{
+        id: number;
+        nama_proyek: string;
+        pic_id: number | null;
+      }>;
+
+      for (const proj of remainingProjects) {
+        const leaderId = proj.pic_id || fifaId;
+        db.prepare("INSERT OR IGNORE INTO project_members (project_id, user_id, role) VALUES (?, ?, 'leader')").run(proj.id, leaderId);
+
+        const linked = db.prepare('SELECT group_id FROM chat_group_projects WHERE project_id = ? LIMIT 1').get(proj.id) as { group_id: number } | undefined;
+        if (!linked) {
+          const insGrp = db
+            .prepare(
+              "INSERT INTO chat_groups (name, description, project_id, created_by, ai_name, ai_model, ai_thinking_mode) VALUES (?, ?, ?, ?, 'Miu', 'nvidia/nemotron-3.5-super-vl:free', 'medium')"
+            )
+            .run(`${proj.nama_proyek} 🚀`, `Ruang koordinasi resmi tim untuk proyek ${proj.nama_proyek}`, proj.id, leaderId);
+          const grpId = Number(insGrp.lastInsertRowid);
+          db.prepare('INSERT OR IGNORE INTO chat_group_projects (group_id, project_id) VALUES (?, ?)').run(grpId, proj.id);
+
+          const pMembers = db.prepare('SELECT user_id, role FROM project_members WHERE project_id = ?').all(proj.id) as Array<{
+            user_id: number;
+            role: string;
+          }>;
+          for (const pm of pMembers) {
+            db.prepare('INSERT OR IGNORE INTO chat_group_members (group_id, user_id, role) VALUES (?, ?, ?)').run(
+              grpId,
+              pm.user_id,
+              pm.role === 'leader' ? 'admin' : 'member'
+            );
+          }
+          db.prepare('INSERT INTO chat_messages (group_id, user_id, sender_name, message, is_ai) VALUES (?, NULL, ?, ?, 1)').run(
+            grpId,
+            'Miu',
+            `Ruang diskusi untuk proyek **${proj.nama_proyek}** telah terhubung otomatis. Ketik \`@Miu\` untuk bantuan koordinasi tim!`
+          );
+        }
+      }
+
+      db.prepare('INSERT OR IGNORE INTO _migrations (key) VALUES (?)').run('hygiene_and_backfill_v2');
+    }
+
+    const migratedV3 = db.prepare('SELECT key FROM _migrations WHERE key = ?').get('hygiene_and_backfill_v3');
+    if (!migratedV3) {
+      db.prepare("UPDATE notes SET title = REPLACE(REPLACE(title, 'Intellecta', 'Productivier'), 'Bento', 'Dashboard'), content = REPLACE(REPLACE(content, 'Intellecta', 'Productivier'), 'Bento', 'Dashboard') WHERE title LIKE '%Intellecta%' OR content LIKE '%Intellecta%' OR title LIKE '%Bento%' OR content LIKE '%Bento%'").run();
+      db.prepare("DELETE FROM chat_messages WHERE LOWER(TRIM(message)) IN ('cok', 'jancok', 'tes', 'test', 'wawawaw') OR LOWER(message) LIKE '%jancok%' OR LOWER(message) LIKE '%@miu halo cok%' OR LOWER(message) LIKE '%bilango jancok%'").run();
+      db.prepare("UPDATE chat_messages SET message = REPLACE(REPLACE(REPLACE(message, '[Intellecta AI]:', ''), '[Intellecta]:', ''), 'Intellecta', 'Productivier') WHERE message LIKE '%Intellecta%'").run();
+      db.prepare("UPDATE chat_messages SET message = REPLACE(message, 'Nama gw **Jarvis**', 'Nama gw **Miu**') WHERE message LIKE '%Jarvis%'").run();
+      db.prepare("UPDATE calendar_events SET title = REPLACE(REPLACE(title, 'Intellecta', 'Productivier'), 'Bento', 'Dashboard'), description = REPLACE(REPLACE(description, 'Intellecta', 'Productivier'), 'Bento', 'Dashboard') WHERE title LIKE '%Intellecta%' OR description LIKE '%Intellecta%' OR title LIKE '%Bento%' OR description LIKE '%Bento%'").run();
+      db.prepare("DELETE FROM notifications WHERE LOWER(message) LIKE '%jancok%' OR LOWER(message) LIKE '%\"cok\"%' OR LOWER(message) LIKE '%halo cok%'").run();
+      db.prepare("UPDATE notifications SET title = REPLACE(REPLACE(title, 'Intellecta', 'Productivier'), 'Bento', 'Dashboard'), message = REPLACE(REPLACE(message, 'Intellecta', 'Productivier'), 'Bento', 'Dashboard') WHERE title LIKE '%Intellecta%' OR message LIKE '%Intellecta%' OR title LIKE '%Bento%' OR message LIKE '%Bento%'").run();
+      db.prepare("UPDATE projects SET nama_proyek = REPLACE(nama_proyek, 'Intellecta', 'Productivier') WHERE nama_proyek LIKE '%Intellecta%'").run();
+      db.prepare("UPDATE project_links SET url = REPLACE(url, 'intellecta', 'productivier') WHERE LOWER(url) LIKE '%intellecta%'").run();
+      db.prepare('INSERT OR IGNORE INTO _migrations (key) VALUES (?)').run('hygiene_and_backfill_v3');
+    }
+  } catch (err) {
+    console.error('Migration hygiene_and_backfill_v2 warning:', err);
   }
 
   return db;

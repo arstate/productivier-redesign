@@ -1,10 +1,15 @@
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
+import { requireAuth } from '@/lib/auth';
 
 export async function GET(req: Request) {
   try {
+    const auth = requireAuth(req);
+    if ('error' in auth) return auth.error;
+
     const { searchParams } = new URL(req.url);
-    const userId = searchParams.get('user_id');
+    const requestedUserId = searchParams.get('user_id');
+    const userId = auth.user.role === 'admin' && requestedUserId ? Number(requestedUserId) : auth.user.id;
     const status = searchParams.get('status');
 
     const db = getDb();
@@ -13,7 +18,7 @@ export async function GET(req: Request) {
 
     if (userId) {
       query += ' AND user_id = ?';
-      params.push(Number(userId));
+      params.push(userId);
     }
 
     if (status && status !== 'all') {
@@ -33,14 +38,17 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
+    const auth = requireAuth(req);
+    if ('error' in auth) return auth.error;
+
     const body = await req.json();
-    const { action_request_id, status, user_id, action_type, payload } = body;
+    const { action_request_id, status, action_type, payload } = body;
 
     const db = getDb();
 
     // 1. If direct approval or rejection of an existing action_request_id
     if (action_request_id) {
-      const res = executeActionRequest(db, Number(action_request_id), status || 'approved', user_id ? Number(user_id) : undefined);
+      const res = executeActionRequest(db, Number(action_request_id), status || 'approved', auth.user.id);
       if (res.error) {
         return NextResponse.json({ error: res.error }, { status: res.statusCode || 400 });
       }
@@ -49,11 +57,13 @@ export async function POST(req: Request) {
 
     // 2. If creating a new action request directly
     if (action_type && payload) {
+      const targetUserId =
+        auth.user.role === 'admin' && body.user_id ? Number(body.user_id) : auth.user.id;
       const ins = db.prepare(`
         INSERT INTO ai_action_requests (user_id, action_type, description, payload_json, status)
         VALUES (?, ?, ?, ?, 'pending')
       `).run(
-        user_id ? Number(user_id) : 1,
+        targetUserId,
         action_type,
         body.description || `Permintaan aksi AI: ${action_type}`,
         typeof payload === 'string' ? payload : JSON.stringify(payload)
@@ -66,7 +76,7 @@ export async function POST(req: Request) {
         INSERT INTO notifications (user_id, title, message, type, action_url, payload_json, is_read)
         VALUES (?, ?, ?, 'ai_permission', ?, ?, 0)
       `).run(
-        user_id ? Number(user_id) : 1,
+        targetUserId,
         'Izin Aksi Diperlukan dari Asisten AI',
         body.description || `AI ingin melakukan perubahan data: ${action_type}. Mohon tinjau dan konfirmasi.`,
         '/api/ai/actions',
@@ -259,6 +269,47 @@ id: number;
 
           resultId = Number(ins.lastInsertRowid);
           executionSummary = `Proyek "${actionPayload.nama_proyek}" berhasil dibuat.`;
+
+          // Auto-insert leader in project_members
+          try {
+            db.prepare('INSERT OR IGNORE INTO project_members (project_id, user_id, role) VALUES (?, ?, ?)').run(
+              resultId,
+              pic,
+              'leader'
+            );
+
+            // Auto-provision chat group
+            const groupName = `${actionPayload.nama_proyek || 'Proyek Baru'} 🚀`;
+            const groupDesc = `Ruang koordinasi resmi tim untuk proyek ${actionPayload.nama_proyek || ''}`;
+            const groupIns = db.prepare(`
+              INSERT INTO chat_groups (name, description, project_id, created_by, ai_name, ai_model, ai_thinking_mode)
+              VALUES (?, ?, ?, ?, 'Miu', 'nvidia/nemotron-3.5-super-vl:free', 'medium')
+            `).run(groupName, groupDesc, resultId, pic);
+
+            const newGroupId = Number(groupIns.lastInsertRowid);
+            db.prepare('INSERT OR IGNORE INTO chat_group_projects (group_id, project_id) VALUES (?, ?)').run(newGroupId, resultId);
+            db.prepare('INSERT OR IGNORE INTO chat_group_members (group_id, user_id, role) VALUES (?, ?, ?)').run(newGroupId, pic, 'admin');
+
+            if (Array.isArray(actionPayload.member_ids)) {
+              for (const mid of actionPayload.member_ids) {
+                const numMid = Number(mid);
+                if (numMid && numMid !== pic) {
+                  db.prepare('INSERT OR IGNORE INTO project_members (project_id, user_id, role) VALUES (?, ?, ?)').run(resultId, numMid, 'member');
+                  db.prepare('INSERT OR IGNORE INTO chat_group_members (group_id, user_id, role) VALUES (?, ?, ?)').run(newGroupId, numMid, 'member');
+                }
+              }
+            }
+
+            db.prepare(`
+              INSERT INTO chat_messages (group_id, user_id, sender_name, message, is_ai)
+              VALUES (?, NULL, 'Miu', ?, 1)
+            `).run(
+              newGroupId,
+              `Halo tim! 👋 Grup koordinasi untuk proyek **${actionPayload.nama_proyek || 'Proyek Baru'}** telah dibuat otomatis oleh Miu AI. Silakan berdiskusi di sini!`
+            );
+          } catch (autoErr) {
+            console.error('Failed auto-provisioning from AI create_project:', autoErr);
+          }
         } else if (existingReq.action_type === 'create_chat_group') {
           const ins = db.prepare(`
             INSERT INTO chat_groups (name, description, project_id, created_by)
@@ -705,9 +756,18 @@ id: number;
             const taskNama = uRow ? uRow.nama : namaUser;
             const taskDivisi = uRow ? uRow.divisi : divisiUser;
 
-            db.prepare("INSERT INTO realisasi (project_id, user_id, nama, divisi, tanggal, aktivitas, target, realisasi, satuan, persentase, status) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, 0, 'Belum')").run(
+            db.prepare(`
+              INSERT INTO realisasi (
+                project_id, user_id, assigned_to_user_id, assigned_by_user_id, deadline,
+                nama, divisi, tanggal, aktivitas, target, realisasi, satuan, persentase, status
+              )
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 0, 'Belum')
+            `).run(
               pId,
               assignedUid,
+              assignedUid,
+              executingUserId,
+              t.deadline || t.tanggal || todayStr,
               taskNama,
               taskDivisi,
               t.tanggal || todayStr,
@@ -715,6 +775,20 @@ id: number;
               Number(t.target) || 1,
               t.satuan || 'Tugas'
             );
+
+            // Notify assignee if delegated
+            if (assignedUid !== executingUserId) {
+              try {
+                db.prepare(`
+                  INSERT INTO notifications (user_id, title, message, type, action_url, is_read)
+                  VALUES (?, 'Tugas Baru Didelegasikan oleh AI', ?, 'task', ?, 0)
+                `).run(
+                  assignedUid,
+                  `${namaUser} menugaskan tugas baru via Miu AI: "${t.aktivitas}" (Target: ${t.target || 1} ${t.satuan || 'Tugas'})`,
+                  `/?tab=projects&project_id=${pId}`
+                );
+              } catch {}
+            }
           }
           executionSummary = `Berhasil merencanakan ${tasks.length} tugas ke proyek #${pId}.`;
         }

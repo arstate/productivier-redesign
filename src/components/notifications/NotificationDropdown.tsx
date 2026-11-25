@@ -22,7 +22,7 @@ interface NotificationDropdownProps {
   user: UserType;
   showToast: (m: string) => void;
   onRefreshData?: () => Promise<void>;
-  onNavigateTab?: (tab: string, extra?: any) => void;
+  onNavigateTab?: (tab: string, extra?: { groupId?: number; projectId?: number }) => void;
 }
 
 export default function NotificationDropdown({
@@ -54,9 +54,25 @@ export default function NotificationDropdown({
   };
 
   useEffect(() => {
-    fetchNotifications();
-    const interval = setInterval(fetchNotifications, 12000);
-    return () => clearInterval(interval);
+    let active = true;
+    const sync = async () => {
+      try {
+        const res = await fetch(`/api/notifications?user_id=${user.id}`);
+        if (res.ok && active) {
+          const data = await res.json();
+          setNotifications(data.notifications || []);
+          setUnreadCount(data.unread_count || 0);
+        }
+      } catch {
+        // Ignore background fetch error
+      }
+    };
+    sync();
+    const interval = setInterval(sync, 12000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
   }, [user.id]);
 
   // Click outside to close
@@ -173,22 +189,49 @@ export default function NotificationDropdown({
   const handleNotificationClick = (notif: NotificationType) => {
     handleMarkRead(notif.id);
 
-    if (notif.type === "chat") {
-      let groupId: number | null = null;
+    let payload: { group_id?: number | string; project_id?: number | string } | null = null;
+    try {
+      payload = typeof notif.payload_json === "string" ? JSON.parse(notif.payload_json) : notif.payload_json;
+    } catch {
+      payload = null;
+    }
+
+    let urlTab: string | null = null;
+    let urlGroupId: number | undefined;
+    let urlProjectId: number | undefined;
+    if (notif.action_url) {
       try {
-        const payload = typeof notif.payload_json === "string" ? JSON.parse(notif.payload_json) : notif.payload_json;
-        groupId = payload?.group_id;
+        const parsedUrl = new URL(notif.action_url, "http://localhost");
+        urlTab = parsedUrl.searchParams.get("tab");
+        const g = parsedUrl.searchParams.get("group") || parsedUrl.searchParams.get("group_id");
+        const p = parsedUrl.searchParams.get("project_id");
+        if (g && Number(g)) urlGroupId = Number(g);
+        if (p && Number(p)) urlProjectId = Number(p);
       } catch {
-        groupId = null;
+        // Ignore malformed action_url
       }
+    }
+
+    const groupId = payload?.group_id ? Number(payload.group_id) : urlGroupId;
+    const projectId = payload?.project_id ? Number(payload.project_id) : urlProjectId;
+
+    if (notif.type === "chat") {
       if (onNavigateTab) {
-        onNavigateTab("chat", { groupId });
+        onNavigateTab("chat", { groupId, projectId });
       }
       setIsOpen(false);
     } else if (notif.type === "task" || notif.type === "client") {
       if (onNavigateTab) {
-        onNavigateTab("projects");
+        onNavigateTab(urlTab || "projects", { projectId });
       }
+      setIsOpen(false);
+    } else if ((notif.type as string) === "nudge") {
+      if (onNavigateTab) {
+        onNavigateTab(urlTab || "input", { projectId });
+      }
+      setIsOpen(false);
+    } else if (urlTab && onNavigateTab) {
+      onNavigateTab(urlTab, { groupId, projectId });
       setIsOpen(false);
     }
   };
@@ -222,19 +265,19 @@ export default function NotificationDropdown({
           setIsOpen(!isOpen);
           if (!isOpen) fetchNotifications();
         }}
-        className={`relative p-2 rounded-full transition cursor-pointer ${
+        className={`relative w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center transition cursor-pointer border border-white/60 dark:border-white/10 shadow-xs ${
           isOpen
-            ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xs"
-            : "text-slate-600 dark:text-slate-300 hover:bg-white/80 dark:hover:bg-slate-800"
+            ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900"
+            : "bg-white/70 dark:bg-slate-800/70 text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700"
         }`}
         title="Pusat Notifikasi & Izin AI"
       >
         <Bell className="w-4 h-4" />
 
         {unreadCount > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-[16px] px-1">
+          <span className="absolute -top-1.5 -right-1.5 flex h-4 min-w-[16px] px-1">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
-            <span className="relative inline-flex rounded-full h-4 min-w-[16px] px-1 bg-amber-500 text-slate-950 font-black text-[9px] items-center justify-center shadow-xs">
+            <span className="relative inline-flex rounded-full h-4 min-w-[16px] px-1 bg-amber-500 text-slate-950 font-black text-[10px] leading-none items-center justify-center shadow-xs">
               {unreadCount > 9 ? "9+" : unreadCount}
             </span>
           </span>
@@ -249,7 +292,7 @@ export default function NotificationDropdown({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 10 }}
             transition={{ duration: 0.15 }}
-            className="absolute right-0 mt-2 w-[360px] sm:w-[400px] max-w-[calc(100vw-32px)] rounded-3xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-2xl overflow-hidden z-50 text-slate-900 dark:text-slate-100"
+            className="absolute right-0 mt-2 w-[360px] sm:w-[400px] max-w-[calc(100vw-32px)] rounded-3xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-2xl overflow-hidden z-[75] text-slate-900 dark:text-slate-100"
           >
             {/* Header */}
             <div className="p-4 bg-slate-50/80 dark:bg-slate-800/80 border-b border-slate-200/60 dark:border-slate-700/60 flex items-center justify-between">
@@ -343,7 +386,10 @@ export default function NotificationDropdown({
                         </div>
 
                         <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed line-clamp-2">
-                          {notif.message}
+                          {notif.message
+                            .replace(/\*\*([^*]+)\*\*/g, "$1")
+                            .replace(/__([^_]+)__/g, "$1")
+                            .replace(/`([^`]+)`/g, "$1")}
                         </p>
 
                         {/* Interactive Action Card if AI Permission */}
@@ -392,8 +438,8 @@ export default function NotificationDropdown({
 
             {/* Footer */}
             <div className="p-2.5 bg-slate-50 dark:bg-slate-800/80 border-t border-slate-200/60 dark:border-slate-700/60 text-center">
-              <span className="text-[10px] text-slate-400 font-medium">
-                Productivier Realtime Notification Engine
+              <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
+                Pusat Notifikasi Real-time Productivier
               </span>
             </div>
           </motion.div>

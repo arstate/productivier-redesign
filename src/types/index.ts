@@ -39,6 +39,19 @@ export type ProjectClientNoteType = {
   created_at: string;
 };
 
+export type ProjectMemberType = {
+  id: number;
+  project_id: number;
+  user_id: number;
+  role: "leader" | "member";
+  created_at?: string;
+  nama?: string;
+  username?: string;
+  divisi?: string;
+  avatar_url?: string;
+  gender?: "female" | "male";
+};
+
 export type ProjectType = {
   id: number;
   nama_proyek: string;
@@ -51,8 +64,12 @@ export type ProjectType = {
   satuan: string;
   status: string;
   deadline?: string;
+  share_token?: string;
   persentase: number;
   links?: ProjectLinkType[];
+  members?: ProjectMemberType[];
+  member_ids?: number[];
+  chat_group_id?: number | null;
 };
 
 export type RealisasiType = {
@@ -72,14 +89,22 @@ export type RealisasiType = {
   kendala?: string;
   solusi?: string;
   bukti_foto_url?: string;
+  assigned_to_user_id?: number | null;
+  assigned_by_user_id?: number | null;
+  assignee_nama?: string | null;
+  assigner_nama?: string | null;
+  deadline?: string;
 };
 
 export type MonitoringType = {
   today: string;
   statusTim: Array<{
     id: number;
+    username?: string;
     nama: string;
     divisi: string;
+    role?: string;
+    phone?: string;
     sudah_input: boolean;
     jumlah_input: number;
     rata_persen: number;

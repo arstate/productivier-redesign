@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
+import { requireAuth } from '@/lib/auth';
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -7,6 +8,9 @@ interface RouteContext {
 
 export async function PATCH(request: Request, context: RouteContext) {
   try {
+    const auth = requireAuth(request);
+    if ('error' in auth) return auth.error;
+
     const { id } = await context.params;
     const body = await request.json();
     const db = getDb();
@@ -14,6 +18,9 @@ export async function PATCH(request: Request, context: RouteContext) {
     const existing = db.prepare('SELECT * FROM personal_todos WHERE id = ?').get(id) as any;
     if (!existing) {
       return NextResponse.json({ error: 'To-do tidak ditemukan' }, { status: 404 });
+    }
+    if (existing.user_id !== auth.user.id && auth.user.role !== 'admin') {
+      return NextResponse.json({ error: 'Akses ditolak' }, { status: 403 });
     }
 
     const updates: string[] = [];
@@ -58,8 +65,19 @@ export async function PATCH(request: Request, context: RouteContext) {
 
 export async function DELETE(request: Request, context: RouteContext) {
   try {
+    const auth = requireAuth(request);
+    if ('error' in auth) return auth.error;
+
     const { id } = await context.params;
     const db = getDb();
+
+    const existing = db.prepare('SELECT user_id FROM personal_todos WHERE id = ?').get(id) as { user_id: number } | undefined;
+    if (!existing) {
+      return NextResponse.json({ error: 'To-do tidak ditemukan' }, { status: 404 });
+    }
+    if (existing.user_id !== auth.user.id && auth.user.role !== 'admin') {
+      return NextResponse.json({ error: 'Akses ditolak' }, { status: 403 });
+    }
 
     const res = db.prepare('DELETE FROM personal_todos WHERE id = ?').run(id);
 

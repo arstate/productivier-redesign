@@ -1,8 +1,12 @@
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
+import { requireAuth } from '@/lib/auth';
 
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const auth = requireAuth(req);
+    if ('error' in auth) return auth.error;
+
     const { id } = await params;
     const body = await req.json();
     const { title, description, date, start_time, end_time, category, color, project_id } = body;
@@ -11,6 +15,9 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     const existing = db.prepare('SELECT * FROM calendar_events WHERE id = ?').get(id) as Record<string, unknown> | undefined;
     if (!existing) {
       return NextResponse.json({ error: 'Jadwal tidak ditemukan' }, { status: 404 });
+    }
+    if (existing.user_id && Number(existing.user_id) !== auth.user.id && auth.user.role !== 'admin') {
+      return NextResponse.json({ error: 'Akses ditolak: Jadwal milik pengguna lain.' }, { status: 403 });
     }
 
     db.prepare(`
@@ -38,8 +45,18 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
 
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const auth = requireAuth(req);
+    if ('error' in auth) return auth.error;
+
     const { id } = await params;
     const db = getDb();
+    const existing = db.prepare('SELECT user_id FROM calendar_events WHERE id = ?').get(id) as { user_id: number | null } | undefined;
+    if (!existing) {
+      return NextResponse.json({ error: 'Jadwal tidak ditemukan' }, { status: 404 });
+    }
+    if (existing.user_id && existing.user_id !== auth.user.id && auth.user.role !== 'admin') {
+      return NextResponse.json({ error: 'Akses ditolak: Jadwal milik pengguna lain.' }, { status: 403 });
+    }
     db.prepare('DELETE FROM calendar_events WHERE id = ?').run(id);
     return NextResponse.json({ success: true });
   } catch (e: unknown) {

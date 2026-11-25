@@ -8,6 +8,8 @@ import {
   FolderKanban,
   X,
   Link2,
+  MessageSquare,
+  Check,
 } from "lucide-react";
 import { UserType, ProjectType } from "@/types";
 import CustomSelect, { CustomSelectOption } from "@/components/ui/CustomSelect";
@@ -17,17 +19,23 @@ export default function ProjectsTab({
   user,
   users,
   projects,
+  viewMode = "tim",
   onRefresh,
   onGoInput,
   onGoNotes,
+  onGoChat,
+  onGoCalendar,
   showToast,
 }: {
   user: UserType;
   users: UserType[];
   projects: ProjectType[];
+  viewMode?: "pribadi" | "tim";
   onRefresh: () => Promise<void>;
-  onGoInput: () => void;
+  onGoInput: (projId?: number, delegateUserId?: number) => void;
   onGoNotes?: (projectId?: number) => void;
+  onGoChat?: (projectId: number) => void;
+  onGoCalendar?: (projectId: number) => void;
   showToast: (m: string) => void;
 }) {
   const [filterStatus, setFilterStatus] = useState<"all" | "aktif" | "selesai">("all");
@@ -35,14 +43,17 @@ export default function ProjectsTab({
   const [selectedProject, setSelectedProject] = useState<ProjectType | null>(null);
   const [nama, setNama] = useState("");
   const [picId, setPicId] = useState(users[0]?.id ? String(users[0].id) : "");
+  const [selectedMemberIds, setSelectedMemberIds] = useState<number[]>([]);
   const [divisi, setDivisi] = useState(user.divisi || "Operasional");
   const [target, setTarget] = useState("100");
   const [satuan, setSatuan] = useState("Tugas");
+  const [deadline, setDeadline] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  // Sync with URL query parameter ?project_id=...
+  // Sync with URL query parameter ?project_id=... and popstate/reset events
   useEffect(() => {
-    if (typeof window !== "undefined") {
+    const syncFromUrl = () => {
+      if (typeof window === "undefined") return;
       const params = new URLSearchParams(window.location.search);
       const pid = params.get("project_id");
       if (pid) {
@@ -50,15 +61,24 @@ export default function ProjectsTab({
         if (found) {
           setSelectedProject(found);
         }
+      } else {
+        setSelectedProject(null);
       }
-    }
+    };
+
+    syncFromUrl();
+    const handleReset = () => setSelectedProject(null);
+    window.addEventListener("popstate", syncFromUrl);
+    window.addEventListener("productivier:reset_project_selection", handleReset);
+    return () => {
+      window.removeEventListener("popstate", syncFromUrl);
+      window.removeEventListener("productivier:reset_project_selection", handleReset);
+    };
   }, [projects]);
 
-  // Reset selectedProject if it was deleted
-  useEffect(() => {
-    if (selectedProject && !projects.some((p) => p.id === selectedProject.id)) {
-      setSelectedProject(null);
-    }
+  const activeSelectedProject = useMemo(() => {
+    if (!selectedProject) return null;
+    return projects.find((p) => p.id === selectedProject.id) || null;
   }, [projects, selectedProject]);
 
   // Listen to custom refresh event
@@ -112,9 +132,18 @@ export default function ProjectsTab({
   };
 
   const filteredProjects = useMemo(() => {
-    if (filterStatus === "all") return projects;
-    return projects.filter((p) => p.status === filterStatus);
-  }, [projects, filterStatus]);
+    let list = projects;
+    if (viewMode === "pribadi") {
+      list = list.filter((p) => {
+        const isPic = p.pic_id === user.id;
+        const isMember = Array.isArray(p.members) && p.members.some((m) => m.user_id === user.id);
+        const inMemberIds = Array.isArray(p.member_ids) && p.member_ids.includes(user.id);
+        return isPic || isMember || inMemberIds;
+      });
+    }
+    if (filterStatus === "all") return list;
+    return list.filter((p) => p.status === filterStatus);
+  }, [projects, filterStatus, viewMode, user.id]);
 
   const userOptions: CustomSelectOption[] = users.map((u) => ({
     value: String(u.id),
@@ -122,26 +151,39 @@ export default function ProjectsTab({
     subLabel: `${u.divisi} · @${u.username}`,
   }));
 
+  const toggleCollaborator = (uId: number) => {
+    setSelectedMemberIds((prev) =>
+      prev.includes(uId) ? prev.filter((id) => id !== uId) : [...prev, uId]
+    );
+  };
+
   const handleCreateProject = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!nama.trim()) return;
     setSubmitting(true);
     try {
+      const effectivePic = picId ? Number(picId) : user.id;
+      const allMembers = Array.from(new Set([effectivePic, ...selectedMemberIds]));
+
       const res = await fetch("/api/projects", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           nama_proyek: nama.trim(),
-          pic_id: picId ? Number(picId) : user.id,
+          pic_id: effectivePic,
+          member_ids: allMembers,
           divisi: divisi.trim(),
           target_total: Number(target),
           satuan: satuan.trim(),
+          deadline: deadline || "",
         }),
       });
       if (res.ok) {
         setNama("");
+        setDeadline("");
+        setSelectedMemberIds([]);
         setShowAddModal(false);
-        showToast("Proyek baru berhasil ditambahkan!");
+        showToast("Proyek baru & grup koordinasi tim berhasil dibuat!");
         await onRefresh();
       } else {
         showToast("Gagal menyimpan proyek");
@@ -154,16 +196,18 @@ export default function ProjectsTab({
   };
 
   // Dedicated In-Page Full View (Replaces Popup Modal)
-  if (selectedProject) {
-    const currentProject = projects.find((p) => p.id === selectedProject.id) || selectedProject;
+  if (activeSelectedProject) {
     return (
       <ProjectDetailView
-        project={currentProject}
+        project={activeSelectedProject}
         user={user}
+        users={users}
         onBack={() => handleSelectProject(null)}
         onRefreshProjects={onRefresh}
         onGoInput={onGoInput}
         onGoNotes={onGoNotes}
+        onGoChat={onGoChat}
+        onGoCalendar={onGoCalendar}
         showToast={showToast}
       />
     );
@@ -174,11 +218,18 @@ export default function ProjectsTab({
       {/* Top Projects Action Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-            Daftar Proyek Tim
-          </h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+              {viewMode === "pribadi" ? "Proyek Saya" : "Daftar Proyek Tim"}
+            </h2>
+            <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+              {filteredProjects.length} Proyek
+            </span>
+          </div>
           <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 font-medium mt-0.5">
-            Target capaian, progres otomatis, dan kolaborator proyek
+            {viewMode === "pribadi"
+              ? "Proyek di mana Anda ditugaskan sebagai PIC atau kolaborator aktif"
+              : "Target capaian, progres otomatis, dan kolaborator proyek agensi"}
           </p>
         </div>
 
@@ -203,7 +254,10 @@ export default function ProjectsTab({
           {/* Add Project CTA (For Admin) */}
           {user.role === "admin" && (
             <button
-              onClick={() => setShowAddModal(true)}
+              onClick={() => {
+                setSelectedMemberIds([user.id]);
+                setShowAddModal(true);
+              }}
               className="bg-[#1C1D21] hover:bg-black text-white px-5 py-2.5 rounded-full font-semibold text-xs sm:text-sm flex items-center gap-2 shadow-md transition active:scale-95 cursor-pointer dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100"
             >
               <Plus className="w-4 h-4" />
@@ -217,11 +271,12 @@ export default function ProjectsTab({
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredProjects.map((p) => {
           const isComplete = p.persentase >= 100;
+          const membersList = p.members || [];
           return (
             <div
               key={p.id}
               onClick={() => handleSelectProject(p)}
-              className="intellecta-card p-6 flex flex-col justify-between hover:shadow-lg transition-all duration-200 group dark:text-slate-100 cursor-pointer border border-transparent hover:border-slate-300 dark:hover:border-slate-700 hover:-translate-y-0.5"
+              className="dashboard-card p-6 flex flex-col justify-between hover:shadow-lg transition-all duration-200 group dark:text-slate-100 cursor-pointer border border-transparent hover:border-slate-300 dark:hover:border-slate-700 hover:-translate-y-0.5"
             >
               <div>
                 {/* Top Badge & Status Row */}
@@ -247,10 +302,33 @@ export default function ProjectsTab({
                 <p className="text-xs text-slate-400 font-medium mt-1">
                   PIC: <span className="text-slate-700 dark:text-slate-200 font-semibold">{p.pic_nama || user.nama}</span>
                 </p>
+
+                {/* Collaborators Avatar Stack */}
+                {membersList.length > 0 && (
+                  <div className="flex items-center gap-2 mt-3 pt-2.5 border-t border-slate-100/80 dark:border-slate-800/80">
+                    <span className="text-[11px] font-semibold text-slate-400">Tim:</span>
+                    <div className="flex items-center -space-x-1.5 overflow-hidden">
+                      {membersList.slice(0, 4).map((m) => (
+                        <div
+                          key={m.id || m.user_id}
+                          title={`${m.nama} (${m.role})`}
+                          className="w-6 h-6 rounded-full bg-slate-900 dark:bg-purple-600 text-white border-2 border-white dark:border-slate-800 flex items-center justify-center font-bold text-[10px] uppercase shadow-2xs"
+                        >
+                          {m.nama ? m.nama.slice(0, 2) : "U"}
+                        </div>
+                      ))}
+                      {membersList.length > 4 && (
+                        <span className="text-[10px] font-bold text-slate-400 pl-1">
+                          +{membersList.length - 4}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Progress & Stats Row */}
-              <div className="mt-6 pt-4 border-t border-slate-100 dark:border-slate-800">
+              <div className="mt-5 pt-4 border-t border-slate-100 dark:border-slate-800">
                 <div className="flex items-center justify-between text-xs mb-2">
                   <span className="text-slate-500 dark:text-slate-400 font-semibold">Progres Capaian</span>
                   <div className="flex items-baseline gap-1 font-extrabold text-slate-900 dark:text-white tabular-nums">
@@ -274,9 +352,25 @@ export default function ProjectsTab({
 
                 {/* Action Shortcuts */}
                 <div className="flex items-center justify-between mt-4 pt-1">
-                  <span className="text-xs text-slate-400 font-medium">
-                    {p.jumlah_laporan || 0} laporan tercatat
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    {onGoChat && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (typeof window !== "undefined") {
+                            sessionStorage.setItem("productivier_chat_project_id", String(p.id));
+                          }
+                          onGoChat(p.id);
+                        }}
+                        className="text-xs font-bold text-purple-700 dark:text-purple-300 hover:underline flex items-center gap-1 cursor-pointer bg-purple-50 dark:bg-purple-950/40 hover:bg-purple-100 dark:hover:bg-purple-900/50 px-3 py-1.5 min-h-[34px] rounded-full transition"
+                        title="Buka ruang diskusi proyek di Chat"
+                      >
+                        <MessageSquare className="w-3 h-3" />
+                        <span>Chat</span>
+                      </button>
+                    )}
+                  </div>
 
                   <div className="flex items-center gap-2">
                     <button
@@ -295,11 +389,11 @@ export default function ProjectsTab({
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        onGoInput();
+                        onGoInput(p.id);
                       }}
                       className="text-xs font-bold text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white flex items-center gap-1 cursor-pointer transition hover:underline"
                     >
-                      <span>+ Catat Realisasi</span>
+                      <span>+ Catat</span>
                       <ChevronRight className="w-3.5 h-3.5" />
                     </button>
                   </div>
@@ -310,24 +404,28 @@ export default function ProjectsTab({
         })}
 
         {filteredProjects.length === 0 && (
-          <div className="col-span-full py-16 text-center intellecta-card p-8">
+          <div className="col-span-full py-16 text-center dashboard-card p-8">
             <FolderKanban className="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
-            <h4 className="font-bold text-base text-slate-800 dark:text-slate-200">Belum Ada Proyek</h4>
+            <h4 className="font-bold text-base text-slate-800 dark:text-slate-200">
+              {viewMode === "pribadi" ? "Belum Ada Proyek Pribadi" : "Belum Ada Proyek"}
+            </h4>
             <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
-              Mulai dengan menambahkan proyek baru untuk memantau progres harian dan target kerja tim.
+              {viewMode === "pribadi"
+                ? "Anda belum terdaftar sebagai PIC atau kolaborator pada proyek mana pun."
+                : "Mulai dengan menambahkan proyek baru untuk memantau progres harian dan target kerja tim."}
             </p>
           </div>
         )}
       </div>
 
-      {/* Add Project Modal with Custom Animated Select */}
+      {/* Add Project Modal with Multi-Member Collaborator Selection */}
       <AnimatePresence>
         {showAddModal && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4"
+            className="fixed inset-0 z-[70] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4"
             onClick={() => setShowAddModal(false)}
           >
             <motion.div
@@ -335,12 +433,12 @@ export default function ProjectsTab({
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.95, y: 10 }}
               onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-md intellecta-card p-6 sm:p-8 shadow-2xl dark:text-slate-100"
+              className="w-full max-w-md dashboard-card p-6 sm:p-8 shadow-2xl dark:text-slate-100 max-h-[90vh] overflow-y-auto"
             >
               <div className="flex items-center justify-between pb-4 border-b border-slate-200/80 dark:border-slate-700 mb-6">
                 <div>
                   <h3 className="text-xl font-extrabold text-slate-900 dark:text-white">Tambah Proyek Baru</h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Tentukan target dan penanggung jawab proyek</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Tentukan target, kolaborator, dan ruang chat otomatis</p>
                 </div>
                 <button
                   onClick={() => setShowAddModal(false)}
@@ -393,6 +491,41 @@ export default function ProjectsTab({
                   </div>
                 </div>
 
+                {/* Multi-member Collaborator Selection */}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
+                    Anggota Kolaborator Tim Proyek
+                  </label>
+                  <div className="p-3 rounded-2xl bg-slate-100/80 dark:bg-slate-800 border border-slate-200/70 dark:border-slate-700 space-y-2 max-h-36 overflow-y-auto">
+                    {users.map((u) => {
+                      const isSelected = selectedMemberIds.includes(u.id);
+                      return (
+                        <div
+                          key={u.id}
+                          onClick={() => toggleCollaborator(u.id)}
+                          className={`flex items-center justify-between p-2 rounded-xl text-xs font-semibold transition cursor-pointer ${
+                            isSelected
+                              ? "bg-purple-100 dark:bg-purple-950/60 text-purple-900 dark:text-purple-200 border border-purple-300 dark:border-purple-800"
+                              : "hover:bg-slate-200/60 dark:hover:bg-slate-700/60 text-slate-700 dark:text-slate-300"
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="w-5 h-5 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center font-bold text-[10px]">
+                              {u.nama.slice(0, 1)}
+                            </span>
+                            <span>{u.nama}</span>
+                            <span className="text-[10px] text-slate-400">({u.divisi})</span>
+                          </div>
+                          {isSelected && <Check className="w-4 h-4 text-purple-600 dark:text-purple-400" />}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    Grup chat dan channel diskusi tim akan dibuat otomatis untuk seluruh anggota terpilih.
+                  </p>
+                </div>
+
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
@@ -422,13 +555,25 @@ export default function ProjectsTab({
                   </div>
                 </div>
 
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
+                    Deadline Proyek (Opsional)
+                  </label>
+                  <input
+                    type="date"
+                    value={deadline}
+                    onChange={(e) => setDeadline(e.target.value)}
+                    className="w-full px-4 py-3 rounded-2xl bg-slate-100/80 dark:bg-slate-800 border border-slate-200/70 dark:border-slate-700 text-sm text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-900 focus:outline-none transition cursor-pointer"
+                  />
+                </div>
+
                 <div className="pt-2">
                   <button
                     type="submit"
                     disabled={submitting}
                     className="w-full min-h-[46px] rounded-full bg-[#1C1D21] hover:bg-black text-white font-semibold text-sm shadow-md active:scale-[0.98] transition flex items-center justify-center gap-2 cursor-pointer dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100"
                   >
-                    <span>{submitting ? "Menyimpan..." : "Simpan Proyek"}</span>
+                    <span>{submitting ? "Menyimpan..." : "Simpan Proyek & Buat Grup Chat"}</span>
                   </button>
                 </div>
               </form>

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
+import { requireAuth } from '@/lib/auth';
 import { executeActionRequest } from '../actions/route';
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '';
@@ -24,6 +25,11 @@ const TOOLS = [
           divisi: { type: 'string', description: 'Divisi proyek (misal: Operasional, Kreatif, Marketing, IT)' },
           deadline: { type: 'string', description: 'Tanggal deadline YYYY-MM-DD' },
           pic_id: { type: 'number', description: 'ID user PIC penanggung jawab' },
+          member_ids: {
+            type: 'array',
+            items: { type: 'number' },
+            description: 'Daftar ID anggota tim yang ikut tergabung dalam proyek & grup chat',
+          },
         },
         required: ['nama_proyek', 'target_total'],
       },
@@ -1654,7 +1660,8 @@ function executeNudge(
     const unsubmitted = db.prepare(`
       SELECT id, nama FROM users
       WHERE role != 'admin' AND id NOT IN (
-        SELECT DISTINCT user_id FROM realisasi WHERE tanggal = ?
+        SELECT DISTINCT COALESCE(assigned_to_user_id, user_id) FROM realisasi
+        WHERE tanggal = ? AND (realisasi > 0 OR assigned_by_user_id IS NULL)
       )
     `).all(todayStr) as Array<{ id: number; nama: string }>;
 
@@ -1692,7 +1699,8 @@ function executeNudge(
       const unsubmitted = db.prepare(`
         SELECT id, nama FROM users
         WHERE role != 'admin' AND id NOT IN (
-          SELECT DISTINCT user_id FROM realisasi WHERE tanggal = ?
+          SELECT DISTINCT COALESCE(assigned_to_user_id, user_id) FROM realisasi
+          WHERE tanggal = ? AND (realisasi > 0 OR assigned_by_user_id IS NULL)
         ) LIMIT 1
       `).get(todayStr) as any;
       targetUser = unsubmitted || db.prepare("SELECT id, nama FROM users WHERE role != 'admin' LIMIT 1").get();
@@ -2218,11 +2226,17 @@ function executePlanTasks(
     }
 
     db.prepare(`
-      INSERT INTO realisasi (project_id, user_id, nama, divisi, tanggal, aktivitas, target, realisasi, satuan, persentase, status)
-      VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, 0, 'Belum')
+      INSERT INTO realisasi (
+        project_id, user_id, assigned_to_user_id, assigned_by_user_id, deadline,
+        nama, divisi, tanggal, aktivitas, target, realisasi, satuan, persentase, status
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 0, 'Belum')
     `).run(
       targetProj ? targetProj.id : null,
       taskUserId,
+      taskUserId,
+      defaultUserId,
+      t.deadline || t.tanggal || todayStr,
       taskNama,
       taskDivisi,
       t.tanggal || todayStr,
@@ -2230,6 +2244,20 @@ function executePlanTasks(
       target,
       t.satuan || (targetProj?.satuan || 'Tugas')
     );
+    if (taskUserId !== defaultUserId) {
+      try {
+        const assignerRow = db.prepare('SELECT nama FROM users WHERE id = ?').get(defaultUserId) as { nama: string } | undefined;
+        const assignerName = assignerRow?.nama || 'Leader';
+        db.prepare(`
+          INSERT INTO notifications (user_id, title, message, type, action_url, is_read)
+          VALUES (?, 'Tugas Baru Didelegasikan oleh AI', ?, 'task', ?, 0)
+        `).run(
+          taskUserId,
+          `${assignerName} menugaskan Anda via Miu AI: "${t.aktivitas}" (Target: ${target} ${t.satuan || targetProj?.satuan || 'Tugas'})`,
+          targetProj ? `/?tab=projects&project_id=${targetProj.id}` : '/?tab=reports'
+        );
+      } catch {}
+    }
     insertedTasks.push(`• **${t.aktivitas}** (Target: ${target} ${t.satuan || targetProj?.satuan || 'Tugas'}) · PIC: *${taskNama}*`);
   }
 
@@ -3506,18 +3534,21 @@ function executeAutonomousIntent(options: {
 
 export async function POST(req: Request) {
   try {
+    const auth = requireAuth(req);
+    if ('error' in auth) return auth.error;
+
     const startTime = Date.now();
     const {
       messages,
-      user_id,
-      user_nama,
-      user_divisi,
-      user_role,
-      user_gender,
       thinking_mode = 'medium',
       selected_model,
       model,
     } = await req.json();
+    const user_id = auth.user.id;
+    const user_nama = auth.user.nama;
+    const user_divisi = auth.user.divisi;
+    const user_role = auth.user.role;
+    const user_gender = auth.user.gender;
 
     const requestedModel = selected_model || model || DEFAULT_AI_MODEL;
     const activeModel = ALLOWED_AI_MODELS.includes(requestedModel)
@@ -3947,6 +3978,7 @@ ${isFemale
 2. ANSWER FIRST & FRAGMENTS: Hasil, status eksekusi, atau penolakan selalu di baris PERTAMA dengan emoji dan **teks tebal**. Buang basa-basi robotik ("Tentu saja, sebagai AI...", "Halo yang terhormat...").
 3. HUMANIZER (ANTI-SLOP): Hindari kata klise AI kaku seperti "menyelami", "merajut", "tapestry", "lanskap dinamis", "secara proaktif". Gunakan bahasa percakapan kerja tim profesional Indonesia yang luwes.
 4. PRESISI 100%: Angka target, persentase, tanggal, nama anggota tim, dan judul proyek WAJIB akurat sesuai database.
+5. FORMAT MARKDOWN RAPI: Gunakan format Markdown standar (\`**teks tebal**\`, \`- bullet\`, \`1. nomor\`, \`### judul\`). Jika menyajikan data dalam bentuk tabel Markdown, SETIAP BARIS TABEL (header, separator \`| :--- | :--- |\`, dan seluruh baris data) WAJIB ditulis dalam SATU BARIS TUNGGAL tanpa pemisah baris (\`\\n\`) di tengah sel/baris, diawali dan diakhiri \`|\`, serta dipisahkan baris kosong sebelum dan sesudah tabel. DILARANG memecah baris tabel atau meninggalkan tanda \`|\` sendirian di baris baru.
 
 ================================================================================
 KEMAMPUAN OTONOM PENUH (100% ZERO-GAP FULL ACCESS CONTROLLING & WEB AUTOMATION):
@@ -4113,12 +4145,21 @@ ZERO-TOLERANCE ANTI-REFUSAL POLICY (MUTLAK BERLAKU):
         }
       }
 
-      // Check for <think>...</think> tags in content
-      if (!nativeReasoning && typeof aiMessage?.content === 'string') {
-        const thinkMatch = aiMessage.content.match(/<think>([\s\S]*?)<\/think>/i);
-        if (thinkMatch) {
-          nativeReasoning = thinkMatch[1].trim();
-          aiMessage.content = aiMessage.content.replace(/<think>[\s\S]*?<\/think>/i, '').trim();
+      // Check for <think>...</think> tags (and unclosed <think>...) in content
+      if (typeof aiMessage?.content === 'string') {
+        const thinkMatches = Array.from(aiMessage.content.matchAll(/<think>([\s\S]*?)<\/think>/gi));
+        if (thinkMatches.length > 0) {
+          if (!nativeReasoning) {
+            nativeReasoning = thinkMatches.map((m: any) => m[1].trim()).filter(Boolean).join('\n\n');
+          }
+          aiMessage.content = aiMessage.content.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+        }
+        const unclosedThinkMatch = aiMessage.content.match(/<think>([\s\S]*)$/i);
+        if (unclosedThinkMatch) {
+          if (!nativeReasoning && unclosedThinkMatch[1].trim()) {
+            nativeReasoning = unclosedThinkMatch[1].trim();
+          }
+          aiMessage.content = aiMessage.content.replace(/<think>[\s\S]*$/gi, '').trim();
         }
       }
 
@@ -4155,6 +4196,7 @@ ZERO-TOLERANCE ANTI-REFUSAL POLICY (MUTLAK BERLAKU):
             divisi,
             deadline,
             pic_id: pic,
+            member_ids: Array.isArray(fnArgs.member_ids) ? fnArgs.member_ids : undefined,
             status: 'aktif',
           };
 
@@ -4459,8 +4501,15 @@ ZERO-TOLERANCE ANTI-REFUSAL POLICY (MUTLAK BERLAKU):
             actionResult = res.actionResult;
           } else {
             const allUsers = db.prepare("SELECT id, nama, divisi, role FROM users WHERE role != 'admin' OR username = 'fifa'").all();
-            const todayInputs = db.prepare('SELECT user_id, COUNT(*) as total, AVG(persentase) as avg_pct FROM realisasi WHERE tanggal = ? GROUP BY user_id').all(todayStr);
-            const map = new Map(todayInputs.map((i: any) => [i.user_id, i]));
+            const todayInputs = db.prepare(`
+              SELECT COALESCE(assigned_to_user_id, user_id) as effective_user_id,
+                     COUNT(*) as total,
+                     AVG(persentase) as avg_pct
+              FROM realisasi
+              WHERE tanggal = ? AND (realisasi > 0 OR assigned_by_user_id IS NULL)
+              GROUP BY effective_user_id
+            `).all(todayStr);
+            const map = new Map(todayInputs.map((i: any) => [i.effective_user_id, i]));
 
             const statusLines = allUsers.map((u: any) => {
               const info: any = map.get(u.id);
@@ -4489,7 +4538,8 @@ ZERO-TOLERANCE ANTI-REFUSAL POLICY (MUTLAK BERLAKU):
           const pendingUsers = db.prepare(`
             SELECT u.nama, u.divisi FROM users u
             WHERE u.role != 'admin' AND u.id NOT IN (
-              SELECT DISTINCT user_id FROM realisasi WHERE tanggal = ?
+              SELECT DISTINCT COALESCE(assigned_to_user_id, user_id) FROM realisasi
+              WHERE tanggal = ? AND (realisasi > 0 OR assigned_by_user_id IS NULL)
             )
           `).all(todayStr) as any[];
 
@@ -5043,7 +5093,7 @@ ZERO-TOLERANCE ANTI-REFUSAL POLICY (MUTLAK BERLAKU):
     // The server MUST intercept it, map the user's intent to the appropriate tool or staged action,
     // execute it, and rewrite the reply so the AI NEVER says "nggak bisa" or refuses a user command again!
     // ==============================================================================
-    const refusalRegex = /(nggak bisa|tidak bisa|gak bisa|ngga bisa|tidak dapat|cuma bisa|hanya bisa|fitur.*(belum|tidak|gak)|(belum|tidak|gak).*fitur|bukan wewenang|tidak punya akses|tidak memiliki akses|tidak berwenang|belum mendukung|belum tersedia|hanya asisten|tidak memiliki kemampuan|tidak ada opsi|manual)/i;
+    const refusalRegex = /(nggak bisa|tidak bisa|gak bisa|ngga bisa|tidak dapat|cuma bisa|hanya bisa|fitur.*(belum|tidak|gak)|(belum|tidak|gak).*fitur|bukan wewenang|tidak punya akses|tidak memiliki akses|tidak berwenang|belum mendukung|belum tersedia|hanya asisten|tidak memiliki kemampuan|tidak ada opsi|(?:cuma|hanya|harus|dilakukan secara)\s+manual)/i;
 
     if (!isOutOfScope && refusalRegex.test(aiResponseText)) {
       const autoRes = executeAutonomousIntent({

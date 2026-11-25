@@ -1,8 +1,51 @@
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
+import { requireAuth, requireAdmin } from '@/lib/auth';
+
+interface GroupProjectRow {
+  group_id: number;
+  id: number;
+  nama_proyek: string;
+  divisi: string;
+  target_total: number;
+  total_realisasi: number;
+  satuan: string;
+  status: string;
+  deadline: string | null;
+  kendala_count: number;
+}
+
+interface EnrichedGroupProject {
+  id: number;
+  nama_proyek: string;
+  divisi: string;
+  persentase: number;
+  target_total?: number;
+  total_realisasi?: number;
+  satuan?: string;
+  status?: string;
+  deadline?: string | null;
+  kendala_count?: number;
+}
+
+interface ChatGroupDbRow {
+  id: number;
+  name: string;
+  description: string;
+  project_id: number | null;
+  project_nama?: string | null;
+  created_by: number;
+  ai_name?: string;
+  ai_model?: string;
+  ai_thinking_mode?: string;
+  [key: string]: unknown;
+}
 
 export async function GET(req: Request) {
   try {
+    const auth = requireAuth(req);
+    if ('error' in auth) return auth.error;
+
     const { searchParams } = new URL(req.url);
     const projectId = searchParams.get('project_id');
 
@@ -54,9 +97,9 @@ export async function GET(req: Request) {
       FROM chat_group_projects cgp
       JOIN projects p ON cgp.project_id = p.id
       ORDER BY p.id ASC
-    `).all() as any[];
+    `).all() as unknown as GroupProjectRow[];
 
-    const projectsByGroup = new Map<number, any[]>();
+    const projectsByGroup = new Map<number, EnrichedGroupProject[]>();
     for (const gp of allGroupProjects) {
       if (!projectsByGroup.has(gp.group_id)) {
         projectsByGroup.set(gp.group_id, []);
@@ -78,7 +121,7 @@ export async function GET(req: Request) {
       });
     }
 
-    const enrichedGroups = (groups as any[]).map((g) => ({
+    const enrichedGroups = (groups as ChatGroupDbRow[]).map((g) => ({
       ...g,
       connected_projects: projectsByGroup.get(g.id) || (g.project_id && g.project_nama ? [{
         id: g.project_id,
@@ -97,16 +140,14 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
+    const auth = requireAdmin(req);
+    if ('error' in auth) return auth.error;
+
     const body = await req.json();
-    const { name, description, project_id, user_id, user_role, ai_name, ai_model, ai_thinking_mode } = body;
+    const { name, description, project_id, ai_name, ai_model, ai_thinking_mode } = body;
 
     if (!name || !name.trim()) {
       return NextResponse.json({ error: 'Nama grup chat wajib diisi' }, { status: 400 });
-    }
-
-    // Role check: Only leaders (admin) can create groups
-    if (user_role !== 'admin') {
-      return NextResponse.json({ error: 'Hanya Leader (Admin) yang memiliki wewenang untuk membuat grup chat baru.' }, { status: 403 });
     }
 
     const defaultAiName = ai_name && ai_name.trim() ? ai_name.trim() : 'Miu';
@@ -118,10 +159,10 @@ export async function POST(req: Request) {
       INSERT INTO chat_groups (name, description, project_id, created_by, ai_name, ai_model, ai_thinking_mode)
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `).run(
-      name.trim(),
-      description ? description.trim() : '',
+      name.trim().slice(0, 120),
+      description ? description.trim().slice(0, 500) : '',
       project_id ? Number(project_id) : null,
-      user_id ? Number(user_id) : 1,
+      auth.user.id,
       defaultAiName,
       defaultAiModel,
       defaultAiThinking
@@ -141,7 +182,7 @@ export async function POST(req: Request) {
     db.prepare(`
       INSERT OR IGNORE INTO chat_group_members (group_id, user_id, role)
       VALUES (?, ?, 'admin')
-    `).run(newGroupId, user_id ? Number(user_id) : 1);
+    `).run(newGroupId, auth.user.id);
 
     // Initial welcome message from AI
     db.prepare(`
@@ -164,22 +205,39 @@ export async function POST(req: Request) {
 
 export async function PATCH(req: Request) {
   try {
+    const auth = requireAuth(req);
+    if ('error' in auth) return auth.error;
+
     const body = await req.json();
-    const { id, name, description, project_id, user_id, user_role, ai_name, ai_model, ai_thinking_mode } = body;
+    const { id, name, description, project_id, ai_name, ai_model, ai_thinking_mode } = body;
 
     if (!id) {
       return NextResponse.json({ error: 'ID grup wajib diisi' }, { status: 400 });
     }
 
     const db = getDb();
-    const group = db.prepare('SELECT * FROM chat_groups WHERE id = ?').get(Number(id)) as any;
+    const group = db.prepare('SELECT * FROM chat_groups WHERE id = ?').get(Number(id)) as
+      | {
+          id: number;
+          name: string;
+          description: string;
+          project_id: number | null;
+          created_by: number;
+          ai_name?: string;
+          ai_model?: string;
+          ai_thinking_mode?: string;
+        }
+      | undefined;
     if (!group) {
       return NextResponse.json({ error: 'Grup tidak ditemukan' }, { status: 404 });
     }
 
-    const isGroupCreator = group.created_by === Number(user_id);
-    const memberRow = db.prepare('SELECT role FROM chat_group_members WHERE group_id = ? AND user_id = ?').get(Number(id), Number(user_id)) as { role: string } | undefined;
-    const isGroupAdmin = memberRow?.role === 'admin' || isGroupCreator || user_role === 'admin';
+    const requester = auth.user;
+    const isGroupCreator = group.created_by === requester.id;
+    const memberRow = db
+      .prepare('SELECT role FROM chat_group_members WHERE group_id = ? AND user_id = ?')
+      .get(Number(id), requester.id) as { role: string } | undefined;
+    const isGroupAdmin = memberRow?.role === 'admin' || isGroupCreator || requester.role === 'admin';
 
     // STRICT PERMISSION CHECK: Only group creator can edit AI settings
     const isUpdatingAISettings = ai_name !== undefined || ai_model !== undefined || ai_thinking_mode !== undefined;
@@ -222,23 +280,35 @@ export async function PATCH(req: Request) {
 
 export async function DELETE(req: Request) {
   try {
+    const auth = requireAuth(req);
+    if ('error' in auth) return auth.error;
+
     const { searchParams } = new URL(req.url);
     const id = searchParams.get('id');
-    const userId = searchParams.get('user_id');
-    const userRole = searchParams.get('user_role');
 
     if (!id) {
       return NextResponse.json({ error: 'ID grup wajib disertakan' }, { status: 400 });
     }
 
     const db = getDb();
-    const group = db.prepare('SELECT * FROM chat_groups WHERE id = ?').get(Number(id)) as any;
+    const group = db.prepare('SELECT * FROM chat_groups WHERE id = ?').get(Number(id)) as
+      | {
+          id: number;
+          name: string;
+          description: string;
+          project_id: number | null;
+          created_by: number;
+          ai_name?: string;
+          ai_model?: string;
+          ai_thinking_mode?: string;
+        }
+      | undefined;
     if (!group) {
       return NextResponse.json({ error: 'Grup tidak ditemukan' }, { status: 404 });
     }
 
-    // Only group creator or system admin can delete the whole group
-    const isAuthorized = group.created_by === Number(userId) || userRole === 'admin';
+    // Only group creator or verified system admin can delete the whole group
+    const isAuthorized = group.created_by === auth.user.id || auth.user.role === 'admin';
     if (!isAuthorized) {
       return NextResponse.json({ error: 'Hanya Pembuat Grup atau Leader yang berhak menghapus grup ini.' }, { status: 403 });
     }

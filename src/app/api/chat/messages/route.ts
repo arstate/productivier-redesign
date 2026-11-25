@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
+import { requireAuth } from '@/lib/auth';
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '';
 const DEFAULT_AI_MODEL = 'nvidia/nemotron-3.5-super-vl:free';
@@ -10,6 +11,9 @@ function escapeRegex(str: string): string {
 
 export async function GET(req: Request) {
   try {
+    const auth = requireAuth(req);
+    if ('error' in auth) return auth.error;
+
     const { searchParams } = new URL(req.url);
     const groupId = searchParams.get('group_id');
 
@@ -67,8 +71,13 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
+    const auth = requireAuth(req);
+    if ('error' in auth) return auth.error;
+
     const body = await req.json();
-    const { group_id, user_id, sender_name, message, ask_ai, reply_to_id } = body;
+    const { group_id, message, ask_ai, reply_to_id } = body;
+    const user_id = auth.user.id;
+    const sender_name = auth.user.nama;
 
     if (!group_id || !message || !message.trim()) {
       return NextResponse.json({ error: 'Data pesan tidak lengkap' }, { status: 400 });
@@ -138,18 +147,28 @@ export async function POST(req: Request) {
     const isFifa = (sender_name && sender_name.toLowerCase().includes('fifa')) || false;
     const isFemale = senderGender === 'female' || isFifa;
 
-    // Create notification for other team members
+    // Create notification for other members of this chat group (excluding sender)
     try {
-      db.prepare(`
+      const groupMembers = db
+        .prepare('SELECT user_id FROM chat_group_members WHERE group_id = ?')
+        .all(Number(group_id)) as Array<{ user_id: number }>;
+      const targetMemberIds = groupMembers
+        .map((gm) => gm.user_id)
+        .filter((uid) => uid !== safeUserId);
+
+      const insChatNotif = db.prepare(`
         INSERT INTO notifications (user_id, title, message, type, action_url, payload_json, is_read)
         VALUES (?, ?, ?, 'chat', ?, ?, 0)
-      `).run(
-        null,
-        `Pesan Baru di ${groupName}`,
-        `${sender_name}: "${cleanMessage.slice(0, 70)}${cleanMessage.length > 70 ? '...' : ''}"`,
-        `/?tab=chat&group=${group_id}`,
-        JSON.stringify({ group_id: Number(group_id), sender_name, is_ai: false })
-      );
+      `);
+      for (const uid of targetMemberIds) {
+        insChatNotif.run(
+          uid,
+          `Pesan Baru di ${groupName}`,
+          `${sender_name}: "${cleanMessage.slice(0, 70)}${cleanMessage.length > 70 ? '...' : ''}"`,
+          `/?tab=chat&group=${group_id}`,
+          JSON.stringify({ group_id: Number(group_id), sender_name, is_ai: false })
+        );
+      }
     } catch (e) {
       console.warn('Failed to insert chat notification:', e);
     }
@@ -404,6 +423,11 @@ Langsung berikan ulasan komprehensif, evaluasi capaian target, status deadline, 
 - Jika pengguna meminta menambahkan anggota ke grup -> konfirmasi langsung bahwa anggota tersebut telah berhasil dimasukkan ke dalam grup.
 - Jika pengguna meminta breakdown rencana kerja atau sprint -> berikan rekomendasi tugas yang terstruktur rapi.`;
 
+      const formattingInstruction = `ATURAN FORMAT MARKDOWN (WAJIB DIPATUHI):
+- Gunakan format Markdown standar yang rapi (\`**teks tebal**\`, daftar bullet \`- item\`, daftar bernomor \`1. item\`, heading \`### Judul\`).
+- Jika menyajikan data dalam bentuk tabel Markdown, SETIAP BARIS TABEL (baris header, baris pemisah \`| :--- | :--- |\`, dan setiap baris data) WAJIB ditulis dalam SATU BARIS TUNGGAL tanpa pemisah baris (\`\\n\`) di tengah sel atau di tengah baris, diawali dan diakhiri tanda \`|\`, serta dipisahkan baris kosong sebelum dan sesudah tabel.
+- DILARANG KERAS memecah satu baris tabel ke baris berikutnya atau meninggalkan karakter \`|\` sendirian di baris baru.`;
+
       const promptMessages = [
         {
           role: 'system',
@@ -413,6 +437,8 @@ Anda membaca SELURUH konteks obrolan grup dari semua orang (anggota tim, leader,
 ${genderInstruction}
 
 ${thinkingInstruction}
+
+${formattingInstruction}
 
 ${antiRefusalInstruction}
 
@@ -601,11 +627,20 @@ ${compactedSummary ? `\n${compactedSummary}` : ''}`,
             }
           }
 
-          if (!aiReasoning && typeof aiReply === 'string') {
-            const thinkMatch = aiReply.match(/<think>([\s\S]*?)<\/think>/i);
-            if (thinkMatch) {
-              aiReasoning = thinkMatch[1].trim();
-              aiReply = aiReply.replace(/<think>[\s\S]*?<\/think>/i, '').trim();
+          if (typeof aiReply === 'string') {
+            const thinkMatches = Array.from(aiReply.matchAll(/<think>([\s\S]*?)<\/think>/gi));
+            if (thinkMatches.length > 0) {
+              if (!aiReasoning) {
+                aiReasoning = thinkMatches.map((m) => m[1].trim()).filter(Boolean).join('\n\n');
+              }
+              aiReply = aiReply.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+            }
+            const unclosedThinkMatch = aiReply.match(/<think>([\s\S]*)$/i);
+            if (unclosedThinkMatch) {
+              if (!aiReasoning && unclosedThinkMatch[1].trim()) {
+                aiReasoning = unclosedThinkMatch[1].trim();
+              }
+              aiReply = aiReply.replace(/<think>[\s\S]*$/gi, '').trim();
             }
           }
         } else {
@@ -619,7 +654,7 @@ ${compactedSummary ? `\n${compactedSummary}` : ''}`,
 
       // Server-side Anti-Refusal Interceptor:
       // If AI output is empty or contains refusal phrases, replace with actionable response
-      const refusalRegex = /(nggak bisa|tidak bisa|gak bisa|ngga bisa|tidak dapat|cuma bisa|hanya bisa|fitur.*(belum|tidak|gak)|(belum|tidak|gak).*fitur|bukan wewenang|tidak punya akses|tidak memiliki akses|tidak berwenang|belum mendukung|belum tersedia|hanya asisten|tidak memiliki kemampuan|tidak ada opsi|manual)/i;
+      const refusalRegex = /(nggak bisa|tidak bisa|gak bisa|ngga bisa|tidak dapat|cuma bisa|hanya bisa|fitur.*(belum|tidak|gak)|(belum|tidak|gak).*fitur|bukan wewenang|tidak punya akses|tidak memiliki akses|tidak berwenang|belum mendukung|belum tersedia|hanya asisten|tidak memiliki kemampuan|tidak ada opsi|(?:cuma|hanya|harus|dilakukan secara)\s+manual)/i;
 
       if (!aiReply || refusalRegex.test(aiReply)) {
         if (isNudgeIntent && actionTargetUser) {
@@ -691,18 +726,24 @@ ${compactedSummary ? `\n${compactedSummary}` : ''}`,
         VALUES (?, ?, ?, ?, 1, ?, ?)
       `).run(Number(group_id), null, aiName, aiReply, userMessageId, aiReasoning || '');
 
-      // Notify about AI response
+      // Notify group members about AI response
       try {
-        db.prepare(`
+        const groupMembers = db
+          .prepare('SELECT user_id FROM chat_group_members WHERE group_id = ?')
+          .all(Number(group_id)) as Array<{ user_id: number }>;
+        const insAiNotif = db.prepare(`
           INSERT INTO notifications (user_id, title, message, type, action_url, payload_json, is_read)
           VALUES (?, ?, ?, 'chat', ?, ?, 0)
-        `).run(
-          null,
-          `Balasan ${aiName} di ${groupName}`,
-          `${aiName} membalas: "${aiReply.slice(0, 70)}${aiReply.length > 70 ? '...' : ''}"`,
-          `/?tab=chat&group=${group_id}`,
-          JSON.stringify({ group_id: Number(group_id), sender_name: aiName, is_ai: true })
-        );
+        `);
+        for (const gm of groupMembers) {
+          insAiNotif.run(
+            gm.user_id,
+            `Balasan ${aiName} di ${groupName}`,
+            `${aiName} membalas: "${aiReply.slice(0, 70)}${aiReply.length > 70 ? '...' : ''}"`,
+            `/?tab=chat&group=${group_id}`,
+            JSON.stringify({ group_id: Number(group_id), sender_name: aiName, is_ai: true })
+          );
+        }
       } catch (e) {
         console.warn('Failed to insert AI chat notification:', e);
       }

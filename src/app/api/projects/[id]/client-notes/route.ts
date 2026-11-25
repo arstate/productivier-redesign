@@ -1,5 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
+import { getSessionUser, requireAuth } from "@/lib/auth";
+import { clampStr } from "@/lib/validation";
+
+function isAuthorizedClientPortalRequest(req: NextRequest, projectId: number): boolean {
+  const sessionUser = getSessionUser(req);
+  if (sessionUser) return true;
+
+  const tokenFromHeader = req.headers.get("x-share-token")?.trim();
+  const tokenFromQuery = new URL(req.url).searchParams.get("token")?.trim();
+  const provided = tokenFromHeader || tokenFromQuery;
+  if (!provided) return false;
+
+  const db = getDb();
+  const row = db.prepare("SELECT share_token FROM projects WHERE id = ?").get(projectId) as
+    | { share_token?: string }
+    | undefined;
+  return Boolean(row?.share_token && row.share_token === provided);
+}
 
 // GET /api/projects/[id]/client-notes - List all client feedback/notes for a project
 export async function GET(
@@ -11,6 +29,10 @@ export async function GET(
     const projectId = Number(id);
     if (!projectId) {
       return NextResponse.json({ error: "ID proyek tidak valid" }, { status: 400 });
+    }
+
+    if (!isAuthorizedClientPortalRequest(req, projectId)) {
+      return NextResponse.json({ error: "Token akses portal klien tidak valid." }, { status: 401 });
     }
 
     const db = getDb();
@@ -42,15 +64,21 @@ export async function POST(
       return NextResponse.json({ error: "ID proyek tidak valid" }, { status: 400 });
     }
 
+    if (!isAuthorizedClientPortalRequest(req, projectId)) {
+      return NextResponse.json({ error: "Token akses portal klien tidak valid." }, { status: 401 });
+    }
+
     const body = await req.json();
     const { author_name, author_role, message, category, status } = body;
 
-    if (!message || !message.trim()) {
+    const cleanMessage = clampStr(message, 2000);
+    if (!cleanMessage) {
       return NextResponse.json({ error: "Pesan catatan wajib diisi" }, { status: 400 });
     }
 
-    const cleanAuthor = author_name && author_name.trim() ? author_name.trim() : "Klien Tamu";
-    const cleanRole = author_role === "team" ? "team" : "client";
+    const sessionUser = getSessionUser(req);
+    const cleanAuthor = clampStr(author_name, 80) || sessionUser?.nama || "Klien Tamu";
+    const cleanRole = author_role === "team" && sessionUser ? "team" : "client";
     const cleanCategory = ["feedback", "revisi", "pertanyaan", "apresiasi"].includes(category)
       ? category
       : "feedback";
@@ -64,7 +92,7 @@ export async function POST(
       VALUES (?, ?, ?, ?, ?, ?)
     `);
 
-    const result = stmt.run(projectId, cleanAuthor, cleanRole, message.trim(), cleanCategory, cleanStatus);
+    const result = stmt.run(projectId, cleanAuthor, cleanRole, cleanMessage, cleanCategory, cleanStatus);
     const newNote = db
       .prepare(`
         SELECT id, project_id, author_name, author_role, message, category, status, created_at
@@ -86,6 +114,9 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const auth = requireAuth(req);
+    if ("error" in auth) return auth.error;
+
     const { id } = await params;
     const projectId = Number(id);
     if (!projectId) {

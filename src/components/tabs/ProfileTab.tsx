@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { UserType, MonitoringType } from "@/types";
 import CustomSelect, { CustomSelectOption } from "@/components/ui/CustomSelect";
+import ConfirmModal from "@/components/ui/ConfirmModal";
 
 export default function ProfileTab({
   user,
@@ -39,14 +40,6 @@ export default function ProfileTab({
   const [isEditing, setIsEditing] = useState(false);
   const [savingMe, setSavingMe] = useState(false);
 
-  // Sync state if user prop updates
-  React.useEffect(() => {
-    setNama(user.nama);
-    setDivisi(user.divisi);
-    setPhone(user.phone || "");
-    setGender(user.gender || "male");
-  }, [user]);
-
   // Search filter for registered users
   const [userQuery, setUserQuery] = useState("");
 
@@ -59,15 +52,17 @@ export default function ProfileTab({
   const [newPhone, setNewPhone] = useState("");
   const [newGender, setNewGender] = useState<"female" | "male">("male");
   const [creatingUser, setCreatingUser] = useState(false);
+  const [deleteTargetUser, setDeleteTargetUser] = useState<{ id: number; username: string } | null>(null);
+  const [deletingUser, setDeletingUser] = useState(false);
 
   const roleOptions: CustomSelectOption[] = [
-    { value: "karyawan", label: "Anggota Tim (Karyawan)" },
-    { value: "admin", label: "Admin / Leader" },
+    { value: "karyawan", label: "Anggota Tim (Staf)" },
+    { value: "admin", label: "Administrator / Leader" },
   ];
 
   const genderOptions: CustomSelectOption[] = [
-    { value: "male", label: "Laki-laki (Bro / Men / Cuy)" },
-    { value: "female", label: "Perempuan (Bestie / Sis / Beb)" },
+    { value: "male", label: "Pria — Sapaan Kasual (Bro/Mas)" },
+    { value: "female", label: "Wanita — Sapaan Kasual (Sis/Mba)" },
   ];
 
   // Self monitoring check
@@ -165,38 +160,42 @@ export default function ProfileTab({
     }
   };
 
-  const handleDeleteUser = async (id: number, username: string) => {
+  const handleDeleteUser = (id: number, username: string) => {
     if (username === "fifa") {
       showToast("Akun utama Fifa tidak dapat dihapus!");
       return;
     }
-    if (!confirm(`Hapus akun @${username}?`)) return;
+    setDeleteTargetUser({ id, username });
+  };
+
+  const executeDeleteUser = async () => {
+    if (!deleteTargetUser) return;
+    setDeletingUser(true);
     try {
-      const res = await fetch(`/api/users/${id}`, {
+      const res = await fetch(`/api/users/${deleteTargetUser.id}`, {
         method: "DELETE",
-        headers: {
-          "x-user-id": String(user.id),
-        },
       });
       if (res.ok) {
         showToast("Akun berhasil dihapus");
+        setDeleteTargetUser(null);
         await onRefresh();
       } else {
-        showToast("Gagal menghapus akun");
+        const data = await res.json().catch(() => ({}));
+        showToast(data.error || "Gagal menghapus akun");
       }
     } catch {
       showToast("Terjadi kesalahan jaringan");
+    } finally {
+      setDeletingUser(false);
     }
   };
 
   return (
-    <div className="w-full max-w-[1550px] mx-auto space-y-6 lg:space-y-7 antialiased select-none">
-      {/* =========================================================================
-          ROW 1: PERSONAL IDENTITY & LIVE TEAM STATUS (BENTO GRID 2-COLUMN)
-          ========================================================================= */}
+    <div className="w-full max-w-[1550px] mx-auto space-y-6 lg:space-y-7 antialiased">
+      {/* ROW 1: PERSONAL IDENTITY & LIVE TEAM STATUS */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* CARD A: USER PROFILE HERO (lg:col-span-4) */}
-        <div className="lg:col-span-4 xl:col-span-4 intellecta-card p-6 sm:p-7 dark:text-slate-100 flex flex-col justify-between gap-5 relative overflow-hidden">
+        <div className="lg:col-span-4 xl:col-span-4 dashboard-card p-6 sm:p-7 dark:text-slate-100 flex flex-col justify-between gap-5 relative overflow-hidden">
           {/* Subtle Accent Glow */}
           <div className="absolute -top-12 -right-12 w-36 h-36 bg-[#D2F27C]/20 dark:bg-[#D2F27C]/10 rounded-full blur-2xl pointer-events-none" />
 
@@ -359,7 +358,7 @@ export default function ProfileTab({
                 </label>
                 <CustomSelect
                   value={gender}
-                  onChange={(v) => setGender(v as any)}
+                  onChange={(v) => setGender(v as "female" | "male")}
                   options={genderOptions}
                   variant="form"
                 />
@@ -393,7 +392,7 @@ export default function ProfileTab({
         </div>
 
         {/* CARD B: MONITORING STATUS TIM HARI INI (lg:col-span-8) */}
-        <div className="lg:col-span-8 xl:col-span-8 intellecta-card p-6 sm:p-7 space-y-5 dark:text-slate-100">
+        <div className="lg:col-span-8 xl:col-span-8 dashboard-card p-6 sm:p-7 space-y-5 dark:text-slate-100">
           {/* Header Row: Title & Team Pulse Progress */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200/80 dark:border-slate-700/80">
             <div>
@@ -486,13 +485,11 @@ export default function ProfileTab({
         </div>
       </div>
 
-      {/* =========================================================================
-          ROW 2: TEAM MANAGEMENT & ONBOARDING (BENTO GRID 2-COLUMN KHUSUS LEADER)
-          ========================================================================= */}
+      {/* ROW 2: TEAM MANAGEMENT & ONBOARDING (LEADER ONLY) */}
       {user.role === "admin" && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
           {/* CARD C: MANAGE REGISTERED USERS LIST (lg:col-span-7) */}
-          <div className="lg:col-span-7 xl:col-span-7 intellecta-card p-6 sm:p-7 space-y-4 dark:text-slate-100">
+          <div className="lg:col-span-7 xl:col-span-7 dashboard-card p-6 sm:p-7 space-y-4 dark:text-slate-100">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200/80 dark:border-slate-700/80">
               <div>
                 <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-white tracking-tight">
@@ -565,7 +562,7 @@ export default function ProfileTab({
           </div>
 
           {/* CARD D: CREATE TEAM MEMBER ACCOUNT (lg:col-span-5) */}
-          <div className="lg:col-span-5 xl:col-span-5 intellecta-card p-6 sm:p-7 space-y-4 dark:text-slate-100">
+          <div className="lg:col-span-5 xl:col-span-5 dashboard-card p-6 sm:p-7 space-y-4 dark:text-slate-100">
             <div className="flex items-center gap-3 pb-3 border-b border-slate-200/80 dark:border-slate-700/80">
               <div className="w-10 h-10 rounded-2xl bg-[#D2F27C] text-slate-900 flex items-center justify-center font-bold shrink-0">
                 <UserPlus className="w-5 h-5" />
@@ -648,7 +645,7 @@ export default function ProfileTab({
                   </label>
                   <CustomSelect
                     value={newRole}
-                    onChange={(v) => setNewRole(v as any)}
+                    onChange={(v) => setNewRole(v as "karyawan" | "admin")}
                     options={roleOptions}
                     variant="form"
                   />
@@ -660,7 +657,7 @@ export default function ProfileTab({
                   </label>
                   <CustomSelect
                     value={newGender}
-                    onChange={(v) => setNewGender(v as any)}
+                    onChange={(v) => setNewGender(v as "female" | "male")}
                     options={genderOptions}
                     variant="form"
                   />
@@ -694,6 +691,100 @@ export default function ProfileTab({
           </div>
         </div>
       )}
+
+      {user.role !== "admin" && (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+          <div className="lg:col-span-7 dashboard-card p-6 sm:p-7 space-y-4 dark:text-slate-100">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200/80 dark:border-slate-700/80">
+              <div>
+                <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-white tracking-tight">
+                  Ringkasan Performa Pribadi Hari Ini
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Evaluasi capaian individu serta kontribusi Anda terhadap kepatuhan tim
+                </p>
+              </div>
+              <span
+                className={`px-3 py-1 rounded-full text-xs font-bold ${
+                  selfMonitoring?.sudah_input
+                    ? "bg-[#D2F27C] text-slate-900"
+                    : "bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300"
+                }`}
+              >
+                {selfMonitoring?.sudah_input ? "Sudah Lapor Hari Ini" : "Menunggu Input"}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+              <div className="p-4 rounded-2xl bg-slate-100/80 dark:bg-slate-800/70 border border-slate-200/60 dark:border-slate-700">
+                <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">
+                  Entri Hari Ini
+                </span>
+                <span className="text-2xl font-black text-slate-900 dark:text-white tabular-nums mt-1 block">
+                  {selfMonitoring?.jumlah_input ?? 0}
+                </span>
+              </div>
+              <div className="p-4 rounded-2xl bg-slate-100/80 dark:bg-slate-800/70 border border-slate-200/60 dark:border-slate-700">
+                <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">
+                  Rata Capaian Anda
+                </span>
+                <span className="text-2xl font-black text-slate-900 dark:text-white tabular-nums mt-1 block">
+                  {selfMonitoring?.rata_persen ?? 0}%
+                </span>
+              </div>
+              <div className="p-4 rounded-2xl bg-slate-100/80 dark:bg-slate-800/70 border border-slate-200/60 dark:border-slate-700">
+                <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">
+                  Kepatuhan Tim
+                </span>
+                <span className="text-2xl font-black text-slate-900 dark:text-white tabular-nums mt-1 block">
+                  {teamInputRate}%
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div className="lg:col-span-5 dashboard-card p-6 sm:p-7 space-y-4 dark:text-slate-100 flex flex-col justify-between">
+            <div className="flex items-center gap-3 pb-3 border-b border-slate-200/80 dark:border-slate-700/80">
+              <div className="w-10 h-10 rounded-2xl bg-[#DCD4FB] text-slate-900 flex items-center justify-center shrink-0">
+                <ShieldCheck className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-white tracking-tight">
+                  Keamanan Sesi &amp; Peran
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Status perlindungan akun kerja
+                </p>
+              </div>
+            </div>
+            <div className="space-y-2.5 text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+              <div className="flex items-center justify-between py-1.5 border-b border-slate-100 dark:border-slate-800">
+                <span className="font-semibold">Akses Akun</span>
+                <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 font-bold">
+                  Terverifikasi Cookie HttpOnly
+                </span>
+              </div>
+              <div className="flex items-center justify-between py-1.5 border-b border-slate-100 dark:border-slate-800">
+                <span className="font-semibold">Divisi Terdaftar</span>
+                <span className="font-bold text-slate-900 dark:text-white">{user.divisi}</span>
+              </div>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 pt-1">
+                Gunakan tombol &quot;Ubah Profil&quot; di kartu kanan atas kapan saja untuk mengganti password atau preferensi nomor WhatsApp.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <ConfirmModal
+        isOpen={deleteTargetUser !== null}
+        title="Hapus Akun Anggota"
+        message={deleteTargetUser ? `Yakin ingin menghapus permanen akun @${deleteTargetUser.username}?` : ""}
+        confirmLabel="Hapus Akun"
+        loading={deletingUser}
+        onConfirm={executeDeleteUser}
+        onCancel={() => !deletingUser && setDeleteTargetUser(null)}
+      />
     </div>
   );
 }

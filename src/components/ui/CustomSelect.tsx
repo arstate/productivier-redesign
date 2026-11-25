@@ -112,7 +112,7 @@ export default function CustomSelect({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.94, y: -6 }}
             transition={{ type: "spring", stiffness: 480, damping: 28 }}
-            className={`absolute top-full mt-1.5 z-50 p-1.5 rounded-2xl bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border border-black/5 dark:border-white/10 shadow-[0_10px_35px_-5px_rgba(24,24,27,0.12)] ${
+            className={`absolute top-full mt-1.5 z-[80] p-1.5 rounded-2xl bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border border-black/5 dark:border-white/10 shadow-[0_10px_35px_-5px_rgba(24,24,27,0.12)] ${
               isPill
                 ? `min-w-[200px] max-w-xs sm:max-w-sm w-max ${align === "right" ? "right-0" : "left-0"}`
                 : "w-full left-0 right-0"
@@ -156,7 +156,7 @@ export default function CustomSelect({
                     <div className="flex items-center gap-1.5 shrink-0">
                       {opt.badge && (
                         <span
-                          className={`px-1.5 py-0.5 rounded-full text-[9px] font-bold ${
+                          className={`px-1.5 py-0.5 rounded-full text-[11px] font-bold ${
                             isSelected
                               ? "bg-white/20 text-white dark:bg-slate-800 dark:text-white"
                               : opt.badgeColor || "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300"

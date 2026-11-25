@@ -1,9 +1,12 @@
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
+import { requireAuth } from '@/lib/auth';
 
 export async function GET(req: Request) {
+  const auth = requireAuth(req);
+  if ('error' in auth) return auth.error;
+
   const { searchParams } = new URL(req.url);
-  const userId = searchParams.get('user_id');
   const projectId = searchParams.get('project_id');
   const tag = searchParams.get('tag');
 
@@ -16,9 +19,9 @@ export async function GET(req: Request) {
   `;
   const params: Array<string | number> = [];
 
-  if (userId) {
+  if (auth.user.role !== 'admin' && !projectId) {
     sql += ' AND n.user_id = ?';
-    params.push(Number(userId));
+    params.push(auth.user.id);
   }
   if (projectId) {
     sql += ' AND n.project_id = ?';
@@ -62,7 +65,10 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
-    const { user_id, title, content, tags, pinned, color, project_id, checklist } = await req.json();
+    const auth = requireAuth(req);
+    if ('error' in auth) return auth.error;
+
+    const { title, content, tags, pinned, color, project_id, checklist } = await req.json();
     if (!title || !title.trim()) {
       return NextResponse.json({ error: 'Judul catatan wajib diisi.' }, { status: 400 });
     }
@@ -75,8 +81,8 @@ export async function POST(req: Request) {
       INSERT INTO notes (user_id, title, content, tags, pinned, color, project_id, checklist)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
-      user_id ? Number(user_id) : 1,
-      title.trim(),
+      auth.user.id,
+      title.trim().slice(0, 200),
       (content || '').trim(),
       tagsJson,
       pinned ? 1 : 0,

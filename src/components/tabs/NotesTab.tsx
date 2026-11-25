@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { UserType, ProjectType, NoteType } from "@/types";
 import CustomSelect, { CustomSelectOption } from "@/components/ui/CustomSelect";
+import ConfirmModal from "@/components/ui/ConfirmModal";
 
 const SPRING = { type: "spring" as const, stiffness: 420, damping: 32 };
 
@@ -42,19 +43,26 @@ export default function NotesTab({ user, projects, showToast }: NotesTabProps) {
   const [selectedTag, setSelectedTag] = useState<string>("all");
   const [selectedProjectId, setSelectedProjectId] = useState<string>(() => {
     if (typeof window !== "undefined") {
-      const p = new URLSearchParams(window.location.search).get("project_id");
-      if (p) return p;
+      const p = new URLSearchParams(window.location.search).get("project_id") || sessionStorage.getItem("productivier_notes_project_id");
+      if (p) {
+        sessionStorage.removeItem("productivier_notes_project_id");
+        return p;
+      }
     }
     return "all";
   });
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const p = new URLSearchParams(window.location.search).get("project_id");
-      if (p && p !== selectedProjectId) {
-        setSelectedProjectId(p);
+    const handleOpenProject = (e: Event) => {
+      const customEvent = e as CustomEvent<{ projectId?: number }>;
+      if (customEvent.detail?.projectId) {
+        setSelectedProjectId(String(customEvent.detail.projectId));
       }
-    }
+    };
+    window.addEventListener("productivier:open_project", handleOpenProject);
+    return () => {
+      window.removeEventListener("productivier:open_project", handleOpenProject);
+    };
   }, []);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingNote, setEditingNote] = useState<NoteType | null>(null);
@@ -69,6 +77,8 @@ export default function NotesTab({ user, projects, showToast }: NotesTabProps) {
   const [checklistItems, setChecklistItems] = useState<Array<{ id: string; text: string; done: boolean }>>([]);
   const [newChecklistText, setNewChecklistText] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const openEditModal = (note: NoteType) => {
     setEditingNote(note);
@@ -95,12 +105,22 @@ export default function NotesTab({ user, projects, showToast }: NotesTabProps) {
   };
 
   useEffect(() => {
-    loadNotes();
+    let active = true;
+    let url = "/api/notes?";
+    if (selectedProjectId !== "all") url += `project_id=${selectedProjectId}&`;
+    fetch(url)
+      .then((res) => res.json())
+      .then((data) => {
+        if (active) setNotes(data.notes || []);
+      })
+      .catch((e) => console.error("Gagal memuat catatan", e));
+
     const handleRefresh = () => {
       loadNotes();
     };
     window.addEventListener("productivier:refresh_data", handleRefresh);
     return () => {
+      active = false;
       window.removeEventListener("productivier:refresh_data", handleRefresh);
     };
   }, [selectedProjectId]);
@@ -256,18 +276,26 @@ export default function NotesTab({ user, projects, showToast }: NotesTabProps) {
     }
   };
 
-  const handleDeleteNote = async (id: number) => {
-    if (!confirm("Hapus catatan ini?")) return;
+  const handleDeleteNote = (id: number) => {
+    setDeleteTargetId(id);
+  };
+
+  const executeDeleteNote = async () => {
+    if (deleteTargetId === null) return;
+    setDeleting(true);
     try {
-      const res = await fetch(`/api/notes/${id}`, { method: "DELETE" });
+      const res = await fetch(`/api/notes/${deleteTargetId}`, { method: "DELETE" });
       if (res.ok) {
         showToast("Catatan telah dihapus");
+        setDeleteTargetId(null);
         await loadNotes();
       } else {
         showToast("Gagal menghapus catatan");
       }
     } catch {
       showToast("Terjadi kesalahan jaringan");
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -316,7 +344,7 @@ export default function NotesTab({ user, projects, showToast }: NotesTabProps) {
 
         <div className="flex flex-wrap items-center gap-3">
           {/* Project Filter with Animated CustomSelect */}
-          <div className="w-48 sm:w-56">
+          <div className="w-full sm:w-64">
             <CustomSelect
               value={selectedProjectId}
               onChange={setSelectedProjectId}
@@ -383,7 +411,7 @@ export default function NotesTab({ user, projects, showToast }: NotesTabProps) {
         </div>
       </div>
 
-      {/* Bento Masonry Grid for Notes */}
+      {/* Responsive Masonry Grid for Notes */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredNotes.map((n) => {
           const isLime = n.color === "#D2F27C";
@@ -398,7 +426,7 @@ export default function NotesTab({ user, projects, showToast }: NotesTabProps) {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95 }}
               transition={SPRING}
-              className={`intellecta-card p-6 flex flex-col justify-between hover:shadow-md transition relative group border border-black/5 dark:border-white/10 ${
+              className={`dashboard-card p-6 flex flex-col justify-between hover:shadow-md transition relative group border border-black/5 dark:border-white/10 ${
                 n.pinned ? "ring-2 ring-slate-900/15 dark:ring-white/20" : ""
               }`}
               style={{
@@ -520,7 +548,7 @@ export default function NotesTab({ user, projects, showToast }: NotesTabProps) {
         })}
 
         {filteredNotes.length === 0 && (
-          <div className="col-span-full py-16 text-center intellecta-card p-8">
+          <div className="col-span-full py-16 text-center dashboard-card p-8">
             <StickyNote className="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
             <h4 className="font-bold text-base text-slate-800 dark:text-slate-200">
               Belum Ada Catatan
@@ -539,7 +567,7 @@ export default function NotesTab({ user, projects, showToast }: NotesTabProps) {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4"
+            className="fixed inset-0 z-[70] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4"
             onClick={() => setShowAddModal(false)}
           >
             <motion.div
@@ -547,7 +575,7 @@ export default function NotesTab({ user, projects, showToast }: NotesTabProps) {
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.95, y: 10 }}
               onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-lg intellecta-card p-6 sm:p-8 shadow-2xl dark:text-slate-100"
+              className="w-full max-w-lg dashboard-card p-6 sm:p-8 shadow-2xl dark:text-slate-100"
             >
               <div className="flex items-center justify-between pb-4 border-b border-slate-200/80 dark:border-slate-700 mb-5">
                 <div>
@@ -724,7 +752,7 @@ export default function NotesTab({ user, projects, showToast }: NotesTabProps) {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4"
+            className="fixed inset-0 z-[70] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4"
             onClick={() => setEditingNote(null)}
           >
             <motion.div
@@ -732,7 +760,7 @@ export default function NotesTab({ user, projects, showToast }: NotesTabProps) {
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.95, y: 10 }}
               onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-lg intellecta-card p-6 sm:p-8 shadow-2xl dark:text-slate-100"
+              className="w-full max-w-lg dashboard-card p-6 sm:p-8 shadow-2xl dark:text-slate-100"
             >
               <div className="flex items-center justify-between pb-4 border-b border-slate-200/80 dark:border-slate-700 mb-5">
                 <div>
@@ -905,6 +933,16 @@ export default function NotesTab({ user, projects, showToast }: NotesTabProps) {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <ConfirmModal
+        isOpen={deleteTargetId !== null}
+        title="Hapus Catatan"
+        message="Catatan beserta daftar checklist di dalamnya akan dihapus permanen."
+        confirmLabel="Hapus Catatan"
+        loading={deleting}
+        onConfirm={executeDeleteNote}
+        onCancel={() => !deleting && setDeleteTargetId(null)}
+      />
     </div>
   );
 }

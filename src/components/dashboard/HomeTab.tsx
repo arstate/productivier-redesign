@@ -15,7 +15,14 @@ import {
   Sparkles,
   FolderKanban,
 } from "lucide-react";
-import { UserType, ProjectType, RealisasiType, MonitoringType, PersonalTodoType } from "@/types";
+import {
+  UserType,
+  ProjectType,
+  RealisasiType,
+  MonitoringType,
+  PersonalTodoType,
+  CalendarEventType,
+} from "@/types";
 import QuickLaunchpadCard from "@/components/dashboard/QuickLaunchpadCard";
 import PersonalFocusChart from "@/components/dashboard/PersonalFocusChart";
 
@@ -23,6 +30,7 @@ interface HomeTabProps {
   user: UserType;
   viewMode: "pribadi" | "tim";
   activeProjectsCount: number;
+  selectedProjectId?: string;
   projects: ProjectType[];
   realisasi: RealisasiType[];
   monitoring: MonitoringType | null;
@@ -36,10 +44,18 @@ interface HomeTabProps {
   showToast: (m: string) => void;
 }
 
+function timeToHourFloat(timeStr?: string, fallbackHour = 9): number {
+  if (!timeStr || !timeStr.includes(":")) return fallbackHour;
+  const [h, m] = timeStr.split(":").map(Number);
+  if (!Number.isFinite(h)) return fallbackHour;
+  return h + (Number.isFinite(m) ? m : 0) / 60;
+}
+
 export default function HomeTab({
   user,
   viewMode,
   activeProjectsCount,
+  selectedProjectId = "all",
   projects,
   realisasi,
   monitoring,
@@ -59,6 +75,24 @@ export default function HomeTab({
   const [newTodoTag, setNewTodoTag] = useState("Desain");
   const [addingTodo, setAddingTodo] = useState(false);
 
+  // Real Calendar Events for Mode Pribadi Focus Timeline
+  const [todayEvents, setTodayEvents] = useState<CalendarEventType[]>([]);
+  const todayStr = new Date().toISOString().slice(0, 10);
+
+  const fetchTodayEvents = async () => {
+    try {
+      const monthStr = todayStr.slice(0, 7);
+      const res = await fetch(`/api/calendar?month=${monthStr}&mine=true`);
+      if (res.ok) {
+        const data = await res.json();
+        const evs = ((data.events || []) as CalendarEventType[]).filter((ev) => ev.date === todayStr);
+        setTodayEvents(evs);
+      }
+    } catch {
+      // ignore network error
+    }
+  };
+
   const fetchTodos = async () => {
     setLoadingTodos(true);
     try {
@@ -75,8 +109,87 @@ export default function HomeTab({
   };
 
   useEffect(() => {
-    fetchTodos();
-  }, [user.id]);
+    let active = true;
+    const monthStr = todayStr.slice(0, 7);
+    Promise.all([
+      fetch(`/api/todos?user_id=${user.id}`).then((r) => (r.ok ? r.json() : null)),
+      fetch(`/api/calendar?month=${monthStr}&mine=true`).then((r) => (r.ok ? r.json() : null)),
+    ])
+      .then(([todosData, calData]) => {
+        if (!active) return;
+        if (todosData) setPersonalTasks(todosData);
+        if (calData) {
+          const evs = ((calData.events || []) as CalendarEventType[]).filter((ev) => ev.date === todayStr);
+          setTodayEvents(evs);
+        }
+      })
+      .catch(() => {});
+
+    const handleRefresh = () => fetchTodayEvents();
+    window.addEventListener("productivier:refresh_data", handleRefresh);
+    return () => {
+      active = false;
+      window.removeEventListener("productivier:refresh_data", handleRefresh);
+    };
+  }, [user.id, todayStr]);
+
+  const handleConvertTodoToCalendar = async (e: React.MouseEvent, t: PersonalTodoType) => {
+    e.stopPropagation();
+    try {
+      const start = t.time && /^\d{2}:\d{2}$/.test(t.time) ? t.time : "10:00";
+      const startHr = Number(start.split(":")[0]);
+      const end = `${String(Math.min(23, startHr + 1)).padStart(2, "0")}:${start.split(":")[1] || "00"}`;
+      const res = await fetch("/api/calendar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: t.title,
+          description: `Dari To-do Pribadi (${t.tag})`,
+          date: todayStr,
+          start_time: start,
+          end_time: end,
+          category: "activity",
+          color: "#D2F27C",
+        }),
+      });
+      if (res.ok) {
+        showToast(`"${t.title}" dijadwalkan ke Kalender hari ini!`);
+        await fetchTodayEvents();
+      } else {
+        showToast("Gagal menjadwalkan to-do ke kalender");
+      }
+    } catch {
+      showToast("Kesalahan jaringan");
+    }
+  };
+
+  const handleConvertTodoToRealisasi = async (e: React.MouseEvent, t: PersonalTodoType) => {
+    e.stopPropagation();
+    const fallbackProjectId =
+      selectedProjectId !== "all" ? Number(selectedProjectId) : projects[0]?.id || null;
+    try {
+      const res = await fetch("/api/realisasi", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          project_id: fallbackProjectId,
+          tanggal: todayStr,
+          aktivitas: t.title,
+          target: 1,
+          realisasi: t.done ? 1 : 0,
+          satuan: t.tag || "Tugas",
+        }),
+      });
+      if (res.ok) {
+        showToast(`"${t.title}" dicatat ke Realisasi Proyek!`);
+        if (onRefreshData) await onRefreshData();
+      } else {
+        showToast("Gagal mencatat ke realisasi");
+      }
+    } catch {
+      showToast("Kesalahan jaringan");
+    }
+  };
 
   const handleAddTodo = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -159,38 +272,64 @@ export default function HomeTab({
     }
   };
 
-  // Real Division Sprint Statistics
+  // Real Division Sprint Statistics (Zero Fake Hardcoded Fallbacks)
   const divisiStats = useMemo(() => {
-    const opTasks = realisasi.filter((r) => r.divisi === "Operasional");
-    const krTasks = realisasi.filter((r) => r.divisi === "Kreatif");
-    const mgTasks = realisasi.filter((r) => r.divisi === "Management" || r.divisi === "Manajemen");
+    const normalize = (val: string) => val.toLowerCase();
+    const opTasks = realisasi.filter((r) => {
+      const d = normalize(r.divisi || "");
+      return d.includes("operasional") || d.includes("konten") || d.includes("ads");
+    });
+    const krTasks = realisasi.filter((r) => {
+      const d = normalize(r.divisi || "");
+      return d.includes("kreatif") || d.includes("desain") || d.includes("tech");
+    });
+    const mgTasks = realisasi.filter((r) => {
+      const d = normalize(r.divisi || "");
+      return d.includes("management") || d.includes("manajemen") || d.includes("umum") || d.includes("strategi");
+    });
 
-    const calcAvg = (tasks: RealisasiType[], fallback: number) => {
-      if (tasks.length === 0) return fallback;
+    const calcAvg = (tasks: RealisasiType[]) => {
+      if (tasks.length === 0) return 0;
       const total = tasks.reduce((sum, t) => sum + (Number(t.persentase) || 0), 0);
       return Math.min(100, Math.round(total / tasks.length));
     };
 
-    const opPct = calcAvg(opTasks, 67);
-    const krPct = calcAvg(krTasks, 85);
-    const mgPct = calcAvg(mgTasks, 100);
-    const overallAvg = Math.round((opPct + krPct + mgPct) / 3);
+    const opPct = calcAvg(opTasks);
+    const krPct = calcAvg(krTasks);
+    const mgPct = calcAvg(mgTasks);
+    const overallAvg = calcAvg(realisasi);
 
-    return { opPct, krPct, mgPct, overallAvg };
+    return {
+      opPct,
+      opCount: opTasks.length,
+      krPct,
+      krCount: krTasks.length,
+      mgPct,
+      mgCount: mgTasks.length,
+      overallAvg,
+    };
   }, [realisasi]);
 
   // Team status list
   const teamStatusList = monitoring?.statusTim || [];
   const blockersList = realisasi.filter((r) => r.kendala && r.kendala.trim().length > 0);
+  const doneTodosCount = personalTasks.filter((t) => t.done).length;
+  const personalScheduleEfficiency =
+    personalTasks.length > 0
+      ? Math.round((doneTodosCount / personalTasks.length) * 100)
+      : todayEvents.length > 0
+      ? 100
+      : 0;
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch" data-purpose="bento-cards-container">
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch" data-purpose="workspace-cards-grid">
       {/* 1. TOP-LEFT CARD: SPRINT VELOCITY & QUICK ACTION LAUNCHPAD */}
       <div className="lg:col-span-5">
         <QuickLaunchpadCard
           user={user}
           projects={projects}
           realisasi={realisasi}
+          selectedProjectId={selectedProjectId}
           onRefreshData={onRefreshData}
           onGoInput={onGoInput}
           onGoNotes={onGoNotes}
@@ -201,13 +340,13 @@ export default function HomeTab({
 
       {/* 2. TOP-RIGHT CARD: CONDITIONAL PERSONAL TIMELINE VS TEAM WORKLOAD RADAR */}
       {viewMode === "pribadi" ? (
-        /* MODE PRIBADI: MY ACTIVITY TIMELINE (Gantt 07:00 - 14:00) */
-        <article className="lg:col-span-7 intellecta-card p-6 flex flex-col justify-between min-h-[350px] dark:text-slate-100">
+        /* MODE PRIBADI: REAL DB CALENDAR FOCUS TIMELINE (07:00 - 17:00) */
+        <article className="lg:col-span-7 dashboard-card p-6 flex flex-col justify-between min-h-[350px] dark:text-slate-100">
           <div className="flex items-start justify-between pb-3">
             <div>
               <h2 className="font-bold text-lg text-[#18181B] dark:text-white">Jadwal Fokus Saya</h2>
               <p className="text-xs text-[#71717A] dark:text-slate-400 mt-0.5">
-                Alur kerja prioritas hari ini berdasarkan agenda kalender
+                Agenda aktif hari ini ({todayStr}) tersinkron langsung dari Kalender Kerja
               </p>
             </div>
             <button
@@ -221,87 +360,77 @@ export default function HomeTab({
             </button>
           </div>
 
-          {/* Timeline Grid (07:00 - 14:00) */}
           <div className="flex-1 flex flex-col justify-between py-2 relative">
-            <div className="grid grid-cols-8 text-[11px] font-medium text-[#71717A] dark:text-slate-400 text-center pb-2 border-b border-black/[0.04] dark:border-white/[0.06]">
+            <div className="grid grid-cols-6 text-[11px] font-medium text-[#71717A] dark:text-slate-400 text-center pb-2 border-b border-black/[0.04] dark:border-white/[0.06]">
               <span>07:00</span>
-              <span>08:00</span>
               <span>09:00</span>
-              <span>10:00</span>
               <span>11:00</span>
-              <span className="font-bold text-[#18181B] dark:text-white">12:00</span>
-              <span>13:00</span>
-              <span>14:00</span>
+              <span className="font-bold text-[#18181B] dark:text-white">13:00</span>
+              <span>15:00</span>
+              <span>17:00</span>
             </div>
 
-            <div className="relative py-3 flex flex-col gap-3">
-              <div className="absolute inset-0 grid grid-cols-8 pointer-events-none">
-                {Array.from({ length: 8 }).map((_, i) => (
-                  <div
-                    key={i}
-                    className={`h-full border-r border-dashed ${
-                      i === 5 ? "border-[#18181B]/40 dark:border-white/40 relative" : "border-black/[0.06] dark:border-white/[0.06]"
-                    }`}
+            <div className="relative py-3 flex flex-col gap-2.5 min-h-[175px] justify-center">
+              {todayEvents.length === 0 ? (
+                <div className="text-center py-8 px-4 rounded-2xl bg-slate-50/90 dark:bg-slate-800/40 border border-dashed border-slate-200 dark:border-slate-700 space-y-2">
+                  <p className="text-xs font-semibold text-slate-600 dark:text-slate-300">
+                    Belum ada agenda terjadwal untuk hari ini.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={onGoCalendar}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-[#18181B] text-white dark:bg-white dark:text-slate-900 text-xs font-bold hover:opacity-90 transition cursor-pointer"
                   >
-                    {i === 5 && (
-                      <div className="absolute top-0 -left-[3px] w-1.5 h-1.5 rounded-full bg-[#18181B] dark:bg-white" />
-                    )}
-                  </div>
-                ))}
-              </div>
-
-              {/* Bar 1: Project Onboarding */}
-              <div
-                onClick={onGoCalendar}
-                className="relative z-10 w-[70%] ml-[12%] p-3 rounded-2xl bg-[#D2F27C] text-[#18181B] flex items-center justify-between shadow-2xs cursor-pointer hover:scale-[1.01] transition"
-              >
-                <div>
-                  <span className="font-bold text-xs block">Project onboarding</span>
-                  <span className="text-[10px] text-[#3F3F46] block">Google Meeting (Sinkronisasi Tim)</span>
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Jadwalkan Sesi Fokus</span>
+                  </button>
                 </div>
-                <span className="w-5 h-5 rounded-full bg-[#18181B] text-[#D2F27C] text-[9px] font-bold grid place-items-center">
-                  FI
-                </span>
-              </div>
-
-              {/* Bar 2: Design Research */}
-              <div
-                onClick={onGoCalendar}
-                className="relative z-10 w-[55%] ml-[38%] p-3 rounded-2xl bg-[#CBD5E1] text-[#18181B] flex items-center justify-between shadow-2xs cursor-pointer hover:scale-[1.01] transition"
-              >
-                <div>
-                  <span className="font-bold text-xs block">Design &amp; Layout Focus</span>
-                  <span className="text-[10px] text-[#3F3F46] block">Master Canvas GSM v2.5</span>
-                </div>
-                <span className="w-5 h-5 rounded-full bg-[#18181B] text-white text-[9px] font-bold grid place-items-center">
-                  FI
-                </span>
-              </div>
-
-              {/* Bar 3: Coffee Break */}
-              <div
-                onClick={onGoCalendar}
-                className="relative z-10 w-[35%] ml-[62%] p-3 rounded-2xl bg-white dark:bg-slate-800 border border-black/5 dark:border-white/10 text-[#18181B] dark:text-white flex items-center justify-between shadow-2xs cursor-pointer hover:scale-[1.01] transition"
-              >
-                <div>
-                  <span className="font-bold text-xs block">Coffee break &amp; Walk</span>
-                  <span className="text-[10px] text-[#71717A] dark:text-slate-400 block">Recharge energi sprint</span>
-                </div>
-                <span className="w-5 h-5 rounded-full bg-slate-100 dark:bg-slate-700 text-[#18181B] dark:text-white text-[9px] font-bold grid place-items-center">
-                  ☕
-                </span>
-              </div>
+              ) : (
+                todayEvents.slice(0, 3).map((ev, idx) => {
+                  const startH = Math.max(7, Math.min(16.5, timeToHourFloat(ev.start_time, 9 + idx * 2)));
+                  const endH = Math.max(startH + 1, Math.min(17.5, timeToHourFloat(ev.end_time, startH + 1.5)));
+                  const leftPct = Math.round(((startH - 7) / 10) * 100);
+                  const widthPct = Math.max(28, Math.min(100 - leftPct, Math.round(((endH - startH) / 10) * 100)));
+                  const cardTone =
+                    idx % 3 === 0
+                      ? "bg-[#D2F27C] text-[#18181B]"
+                      : idx % 3 === 1
+                      ? "bg-[#DCD4FB] text-[#18181B]"
+                      : "bg-slate-100 dark:bg-slate-800 border border-black/5 dark:border-white/10 text-[#18181B] dark:text-white";
+                  return (
+                    <div
+                      key={ev.id}
+                      onClick={onGoCalendar}
+                      style={{ marginLeft: `${leftPct}%`, width: `${widthPct}%` }}
+                      className={`relative z-10 p-3 rounded-2xl ${cardTone} flex items-center justify-between gap-2 shadow-2xs cursor-pointer hover:scale-[1.01] transition`}
+                    >
+                      <div className="min-w-0">
+                        <span className="font-bold text-xs block truncate">{ev.title}</span>
+                        <span className="text-[11px] opacity-75 block truncate">
+                          {ev.start_time} – {ev.end_time}
+                          {ev.project_nama ? ` · ${ev.project_nama}` : ""}
+                        </span>
+                      </div>
+                      <span className="w-6 h-6 rounded-full bg-[#18181B] text-[#D2F27C] text-[10px] font-bold grid place-items-center shrink-0">
+                        {user.nama.slice(0, 2).toUpperCase()}
+                      </span>
+                    </div>
+                  );
+                })
+              )}
             </div>
           </div>
 
           <div className="pt-2 flex items-center justify-between text-xs text-[#71717A] dark:text-slate-400 border-t border-black/[0.04] dark:border-white/[0.06]">
-            <span>Blok fokus aktif: 3 sesi hari ini</span>
-            <span className="font-semibold text-[#18181B] dark:text-white">Efisiensi Jadwal 85%</span>
+            <span>Agenda aktif hari ini: {todayEvents.length} sesi</span>
+            <span className="font-semibold text-[#18181B] dark:text-white tabular-nums">
+              Penyelesaian To-do: {personalScheduleEfficiency}%
+            </span>
           </div>
         </article>
       ) : (
         /* MODE TIM: WORKLOAD RADAR & TEAM SUBMISSION STATUS */
-        <article className="lg:col-span-7 intellecta-card p-6 flex flex-col justify-between min-h-[350px] dark:text-slate-100">
+        <article className="lg:col-span-7 dashboard-card p-6 flex flex-col justify-between min-h-[350px] dark:text-slate-100">
           <div className="flex items-start justify-between pb-3 border-b border-slate-200/80 dark:border-slate-800">
             <div>
               <div className="flex items-center gap-2">
@@ -325,7 +454,7 @@ export default function HomeTab({
 
           <div className="space-y-3 flex-1 py-3 overflow-y-auto max-h-56">
             {teamStatusList.map((m) => {
-              const memberPhone = (m as any).phone || (m.nama.includes("1") ? "6281234567890" : m.nama.includes("2") ? "6289876543210" : "6285196598881");
+              const memberPhone = m.phone || (m.nama.includes("1") ? "6281234567890" : m.nama.includes("2") ? "6289876543210" : "6285196598881");
               return (
                 <div
                   key={m.id}
@@ -356,17 +485,17 @@ export default function HomeTab({
                       {m.sudah_input ? "✓ Sudah Input" : "Belum Input"}
                     </span>
 
-                    {!m.sudah_input && (
+                    {user.role === "admin" && !m.sudah_input && m.id !== user.id && m.role !== "admin" && (
                       <a
                         href={`https://wa.me/${memberPhone}?text=Halo%20${encodeURIComponent(
                           m.nama
                         )},%20jangan%20lupa%20input%20realisasi%20harian%20di%20Productivier%20ya!`}
                         target="_blank"
                         rel="noreferrer"
-                        className="px-2.5 py-1 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold flex items-center gap-1 shadow-2xs transition"
+                        className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold flex items-center gap-1 shadow-2xs transition"
                         title="Colek via WhatsApp"
                       >
-                        <MessageCircle className="w-3 h-3" />
+                        <MessageCircle className="w-3.5 h-3.5" />
                         <span>Colek WA</span>
                       </a>
                     )}
@@ -394,7 +523,7 @@ export default function HomeTab({
       {/* 3. BOTTOM-LEFT CARD: CONDITIONAL PERSONAL TO-DO VS TEAM REVIEW & BLOCKERS */}
       {viewMode === "pribadi" ? (
         /* MODE PRIBADI: INTERACTIVE TO-DO CHECKLIST WITH DIRECT INPUT */
-        <article className="lg:col-span-5 intellecta-card p-6 flex flex-col justify-between min-h-[350px] dark:text-slate-100">
+        <article className="lg:col-span-5 dashboard-card p-6 flex flex-col justify-between min-h-[350px] dark:text-slate-100">
           <div className="flex items-start justify-between pb-3">
             <div>
               <div className="flex items-center gap-2">
@@ -453,15 +582,31 @@ export default function HomeTab({
                     <span className="text-xs font-semibold truncate">{t.title}</span>
                   </div>
 
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                  <div className="flex items-center gap-1 shrink-0">
+                    <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
                       {t.tag}
                     </span>
                     <button
                       type="button"
+                      onClick={(e) => handleConvertTodoToCalendar(e, t)}
+                      title="Jadwalkan ke Kalender hari ini"
+                      className="opacity-70 group-hover:opacity-100 p-1 text-slate-500 hover:text-purple-600 transition rounded-lg hover:bg-purple-50 dark:hover:bg-purple-950/40 cursor-pointer"
+                    >
+                      <Calendar className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => handleConvertTodoToRealisasi(e, t)}
+                      title="Catat sebagai Realisasi Proyek"
+                      className="opacity-70 group-hover:opacity-100 p-1 text-slate-500 hover:text-emerald-600 transition rounded-lg hover:bg-emerald-50 dark:hover:bg-emerald-950/40 cursor-pointer"
+                    >
+                      <ArrowUpRight className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
                       onClick={(e) => handleDeleteTodo(e, t.id)}
                       title="Hapus to-do"
-                      className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-red-500 transition rounded-lg hover:bg-red-50 dark:hover:bg-red-950/40 cursor-pointer"
+                      className="opacity-70 group-hover:opacity-100 p-1 text-slate-400 hover:text-red-500 transition rounded-lg hover:bg-red-50 dark:hover:bg-red-950/40 cursor-pointer"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
@@ -514,7 +659,7 @@ export default function HomeTab({
         </article>
       ) : (
         /* MODE TIM: TEAM REVIEW & URGENT BLOCKERS */
-        <article className="lg:col-span-5 intellecta-card p-6 flex flex-col justify-between min-h-[350px] dark:text-slate-100">
+        <article className="lg:col-span-5 dashboard-card p-6 flex flex-col justify-between min-h-[350px] dark:text-slate-100">
           <div className="flex items-start justify-between pb-3 border-b border-slate-200/80 dark:border-slate-800">
             <div>
               <div className="flex items-center gap-2">
@@ -626,20 +771,26 @@ export default function HomeTab({
       {/* 4. BOTTOM-RIGHT CARD: CONDITIONAL PERSONAL FOCUS CHART VS TEAM EFFICIENCY */}
       {viewMode === "pribadi" ? (
         /* MODE PRIBADI: PERSONAL FOCUS EFFICIENCY BAR CHART */
-        <PersonalFocusChart tren7Hari={monitoring?.tren7Hari} onGoReports={onGoReports} />
+        <PersonalFocusChart
+          user={user}
+          viewMode={viewMode}
+          realisasi={realisasi}
+          tren7Hari={monitoring?.tren7Hari}
+          onGoReports={onGoReports}
+        />
       ) : (
         /* MODE TIM: DIVISION SPRINT VELOCITY & SPEED BREAKDOWN */
-        <article className="lg:col-span-7 intellecta-card p-6 flex flex-col justify-between min-h-[350px] dark:text-slate-100">
+        <article className="lg:col-span-7 dashboard-card p-6 flex flex-col justify-between min-h-[350px] dark:text-slate-100">
           <div className="flex items-start justify-between pb-3 border-b border-slate-200/80 dark:border-slate-800">
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="font-bold text-lg text-[#18181B] dark:text-white">Kecepatan Sprint Divisi</h2>
-                <span className="px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 text-[10px] font-bold">
+                <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 text-[11px] font-bold">
                   {divisiStats.overallAvg}% Efisiensi
                 </span>
               </div>
               <p className="text-xs text-[#71717A] dark:text-slate-400 mt-0.5">
-                Tingkat pencapaian target harian berdasarkan agregasi data realisasi tugas tim
+                Tingkat pencapaian target berdasarkan {realisasi.length} laporan realisasi nyata
               </p>
             </div>
             <button
@@ -652,10 +803,12 @@ export default function HomeTab({
           </div>
 
           <div className="flex-1 flex flex-col justify-around py-3 space-y-4">
-            {/* Division 1: Operasional */}
+            {/* Division 1: Operasional & Konten */}
             <div>
               <div className="flex items-center justify-between text-xs font-bold mb-1.5">
-                <span className="text-slate-800 dark:text-slate-200">Divisi Operasional &amp; Konten</span>
+                <span className="text-slate-800 dark:text-slate-200">
+                  Divisi Operasional &amp; Konten ({divisiStats.opCount})
+                </span>
                 <span className="tabular-nums text-slate-900 dark:text-white">{divisiStats.opPct}% Efisiensi</span>
               </div>
               <div className="w-full h-3 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
@@ -666,10 +819,12 @@ export default function HomeTab({
               </div>
             </div>
 
-            {/* Division 2: Kreatif */}
+            {/* Division 2: Kreatif & Teknologi */}
             <div>
               <div className="flex items-center justify-between text-xs font-bold mb-1.5">
-                <span className="text-slate-800 dark:text-slate-200">Divisi Kreatif &amp; Desain</span>
+                <span className="text-slate-800 dark:text-slate-200">
+                  Divisi Kreatif &amp; Teknologi ({divisiStats.krCount})
+                </span>
                 <span className="tabular-nums text-slate-900 dark:text-white">{divisiStats.krPct}% Efisiensi</span>
               </div>
               <div className="w-full h-3 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
@@ -680,10 +835,12 @@ export default function HomeTab({
               </div>
             </div>
 
-            {/* Division 3: Manajemen */}
+            {/* Division 3: Manajemen & Umum */}
             <div>
               <div className="flex items-center justify-between text-xs font-bold mb-1.5">
-                <span className="text-slate-800 dark:text-slate-200">Divisi Manajemen &amp; Strategi</span>
+                <span className="text-slate-800 dark:text-slate-200">
+                  Divisi Manajemen &amp; Umum ({divisiStats.mgCount})
+                </span>
                 <span className="tabular-nums text-slate-900 dark:text-white">{divisiStats.mgPct}% Efisiensi</span>
               </div>
               <div className="w-full h-3 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">

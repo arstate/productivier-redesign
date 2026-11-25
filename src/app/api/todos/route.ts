@@ -1,18 +1,16 @@
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
+import { requireAuth } from '@/lib/auth';
 
 export async function GET(request: Request) {
   try {
-    const { searchParams } = new URL(request.url);
-    const userId = searchParams.get('user_id');
+    const auth = requireAuth(request);
+    if ('error' in auth) return auth.error;
 
     const db = getDb();
-    let todos;
-    if (userId) {
-      todos = db.prepare('SELECT * FROM personal_todos WHERE user_id = ? ORDER BY created_at DESC').all(Number(userId));
-    } else {
-      todos = db.prepare('SELECT * FROM personal_todos ORDER BY created_at DESC').all();
-    }
+    const todos = db
+      .prepare('SELECT * FROM personal_todos WHERE user_id = ? ORDER BY created_at DESC')
+      .all(auth.user.id);
 
     const formatted = todos.map((t: any) => ({
       ...t,
@@ -28,8 +26,11 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    const auth = requireAuth(request);
+    if ('error' in auth) return auth.error;
+
     const body = await request.json();
-    const { user_id, title, tag, time } = body;
+    const { title, tag, time } = body;
 
     if (!title || !title.trim()) {
       return NextResponse.json({ error: 'Judul to-do wajib diisi' }, { status: 400 });
@@ -37,7 +38,7 @@ export async function POST(request: Request) {
 
     const db = getDb();
     const id = body.id || `todo_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-    const finalUserId = Number(user_id) || 1;
+    const finalUserId = auth.user.id;
     const finalTag = tag ? String(tag).trim() : 'Umum';
     const finalTime = time ? String(time).trim() : '';
 

@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import { UserType, ProjectType, ChatGroupType, ChatGroupMemberType } from "@/types";
 import AIMascot from "@/components/ui/AIMascot";
+import CustomSelect from "@/components/ui/CustomSelect";
 
 interface GroupInfoModalProps {
   isOpen: boolean;
@@ -68,7 +69,18 @@ export default function GroupInfoModal({
   const [addingMember, setAddingMember] = useState(false);
 
   // Multi-Project Connector State
-  const [connectedProjects, setConnectedProjects] = useState<any[]>([]);
+  const [connectedProjects, setConnectedProjects] = useState<Array<{
+    id: number;
+    nama_proyek: string;
+    divisi?: string;
+    persentase?: number;
+    target_total?: number;
+    total_realisasi?: number;
+    satuan?: string;
+    status?: string;
+    deadline?: string | null;
+    kendala_count?: number;
+  }>>([]);
   const [loadingProjects, setLoadingProjects] = useState(false);
   const [selectedProjectIdToConnect, setSelectedProjectIdToConnect] = useState<string>("");
   const [connectingProject, setConnectingProject] = useState(false);
@@ -185,7 +197,8 @@ export default function GroupInfoModal({
   };
 
   useEffect(() => {
-    if (isOpen) {
+    if (!isOpen) return;
+    const t = setTimeout(() => {
       setEditName(group.name);
       setEditDesc(group.description || "");
       setSelectedAiName(group.ai_name || "Miu");
@@ -202,8 +215,9 @@ export default function GroupInfoModal({
       loadMembers();
       loadAllUsers();
       loadConnectedProjects();
-    }
-  }, [isOpen, group.id, group.ai_name, group.ai_model, group.ai_thinking_mode]);
+    }, 0);
+    return () => clearTimeout(t);
+  }, [isOpen, group.id, group.name, group.description, group.ai_name, group.ai_model, group.ai_thinking_mode]);
 
   if (!isOpen) return null;
 
@@ -417,7 +431,7 @@ export default function GroupInfoModal({
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: 24 }}
       transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-      className="flex flex-col h-full relative overflow-hidden"
+      className="flex flex-col h-full min-h-0 relative overflow-hidden"
     >
       {/* Native Top App Bar */}
       <div className="pb-3.5 border-b border-black/[0.06] dark:border-white/[0.08] flex items-center justify-between shrink-0 mb-3">
@@ -439,7 +453,7 @@ export default function GroupInfoModal({
       </div>
 
       {/* Scrollable Body */}
-      <div className="flex-1 overflow-y-auto pr-1 space-y-5">
+      <div className="flex-1 min-h-0 overflow-y-auto pr-1 pb-6 space-y-5">
           {/* Group Profile Hero Card */}
           <div className="flex flex-col items-center text-center p-5 rounded-2xl bg-gradient-to-b from-slate-50 to-white dark:from-slate-800/50 dark:to-slate-900 border border-slate-200/60 dark:border-slate-800 relative">
             {/* Avatar Pill */}
@@ -592,7 +606,7 @@ export default function GroupInfoModal({
                             {proj.status}
                           </span>
                         )}
-                        {proj.kendala_count > 0 && (
+                        {(proj.kendala_count ?? 0) > 0 && (
                           <span className="px-1.5 py-0.2 rounded-md bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 text-[10px] font-bold flex items-center gap-1">
                             <AlertTriangle className="w-2.5 h-2.5" />
                             <span>{proj.kendala_count} Kendala</span>
@@ -644,18 +658,19 @@ export default function GroupInfoModal({
             {isGroupAdmin && (
               <div className="pt-2 border-t border-slate-200/60 dark:border-slate-700/60">
                 <div className="flex items-center gap-2">
-                  <select
-                    value={selectedProjectIdToConnect}
-                    onChange={(e) => setSelectedProjectIdToConnect(e.target.value)}
-                    className="flex-1 px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                  >
-                    <option value="">-- Hubungkan Proyek Lain ke Grup Ini --</option>
-                    {availableProjectsToConnect.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.nama_proyek} ({p.divisi} · {p.persentase}%)
-                      </option>
-                    ))}
-                  </select>
+                  <div className="flex-1">
+                    <CustomSelect
+                      variant="form"
+                      value={selectedProjectIdToConnect}
+                      onChange={setSelectedProjectIdToConnect}
+                      placeholder="-- Hubungkan Proyek Lain ke Grup Ini --"
+                      options={availableProjectsToConnect.map((p) => ({
+                        value: String(p.id),
+                        label: p.nama_proyek,
+                        subLabel: `${p.divisi} · ${p.persentase}%`,
+                      }))}
+                    />
+                  </div>
                   <button
                     type="button"
                     disabled={!selectedProjectIdToConnect || connectingProject}
@@ -943,18 +958,19 @@ export default function GroupInfoModal({
 
                       {availableUsersToAdd.length > 0 ? (
                         <div className="flex items-center gap-2">
-                          <select
-                            value={selectedUserIdToAdd}
-                            onChange={(e) => setSelectedUserIdToAdd(e.target.value)}
-                            className="flex-1 px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 text-xs text-slate-900 dark:text-white focus:outline-none"
-                          >
-                            <option value="">-- Pilih Anggota --</option>
-                            {availableUsersToAdd.map((u) => (
-                              <option key={u.id} value={u.id}>
-                                {u.nama} ({u.divisi} - {u.role})
-                              </option>
-                            ))}
-                          </select>
+                          <div className="flex-1">
+                            <CustomSelect
+                              variant="form"
+                              value={selectedUserIdToAdd}
+                              onChange={setSelectedUserIdToAdd}
+                              placeholder="-- Pilih Anggota --"
+                              options={availableUsersToAdd.map((u) => ({
+                                value: String(u.id),
+                                label: u.nama,
+                                subLabel: `${u.divisi} · ${u.role}`,
+                              }))}
+                            />
+                          </div>
                           <button
                             disabled={!selectedUserIdToAdd || addingMember}
                             onClick={handleAddMember}

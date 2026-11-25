@@ -7,19 +7,18 @@ import {
   StickyNote,
   Calendar,
   Link2,
-  Sparkles,
-  CheckCircle2,
   X,
   ArrowRight,
-  Copy,
 } from "lucide-react";
 import { UserType, ProjectType, RealisasiType } from "@/types";
 import AIMascot from "@/components/ui/AIMascot";
+import CustomSelect from "@/components/ui/CustomSelect";
 
 interface QuickLaunchpadCardProps {
   user: UserType;
   projects: ProjectType[];
   realisasi: RealisasiType[];
+  selectedProjectId?: string;
   onRefreshData?: () => Promise<void>;
   onGoInput: () => void;
   onGoNotes?: () => void;
@@ -31,6 +30,7 @@ export default function QuickLaunchpadCard({
   user,
   projects,
   realisasi,
+  selectedProjectId = "all",
   onRefreshData,
   onGoInput,
   onGoNotes,
@@ -42,17 +42,20 @@ export default function QuickLaunchpadCard({
   const [aktivitas, setAktivitas] = useState("");
   const [target, setTarget] = useState("1");
   const [realisasiNum, setRealisasiNum] = useState("1");
-  const [projectId, setProjectId] = useState(projects[0]?.id ? String(projects[0].id) : "1");
+  const [projectId, setProjectId] = useState(
+    selectedProjectId !== "all" ? selectedProjectId : projects[0]?.id ? String(projects[0].id) : "1"
+  );
   const [submitting, setSubmitting] = useState(false);
 
   // Calculate Sprint Velocity for Today
   const todayStr = new Date().toISOString().slice(0, 10);
   const todayTasks = realisasi.filter((r) => r.tanggal === todayStr);
   const completedCount = todayTasks.filter((r) => r.persentase >= 100).length;
-  const totalTargetCount = Math.max(todayTasks.length, 5);
-  const velocityPct = totalTargetCount > 0
-    ? Math.min(100, Math.round((completedCount / totalTargetCount) * 100))
-    : 0;
+  const totalTargetCount = todayTasks.length;
+  const velocityPct =
+    totalTargetCount > 0
+      ? Math.min(100, Math.round((completedCount / totalTargetCount) * 100))
+      : 0;
 
   // SVG Radial Ring calculations
   const radius = 34;
@@ -60,15 +63,22 @@ export default function QuickLaunchpadCard({
   const strokeDashoffset = circumference - (velocityPct / 100) * circumference;
 
   const handleCopyPortalLink = () => {
-    const firstProjId = projects[0]?.id || 1;
-    const portalUrl = `${window.location.origin}/client/project/${firstProjId}`;
+    const targetProject =
+      (selectedProjectId !== "all"
+        ? projects.find((p) => String(p.id) === selectedProjectId)
+        : undefined) || projects[0];
+    if (!targetProject) {
+      showToast("Belum ada proyek aktif untuk disalin.");
+      return;
+    }
+    const tokenQs = targetProject.share_token ? `?token=${encodeURIComponent(targetProject.share_token)}` : "";
+    const portalUrl = `${window.location.origin}/client/project/${targetProject.id}${tokenQs}`;
     navigator.clipboard.writeText(portalUrl);
-    showToast("Link Portal Klien berhasil disalin!");
+    showToast(`Tautan portal "${targetProject.nama_proyek}" berhasil disalin!`);
   };
 
   const handleOpenFloatingAI = () => {
-    // Dispatch custom event so FloatingAIAgent can open if needed, or click its button
-    const btn = document.querySelector('[aria-label="Buka Miu AI Agent"], [aria-label="Buka Intellecta AI Agent"]') as HTMLButtonElement | null;
+    const btn = document.querySelector('[aria-label="Buka Miu AI Agent"]') as HTMLButtonElement | null;
     if (btn) {
       btn.click();
     } else {
@@ -117,7 +127,7 @@ export default function QuickLaunchpadCard({
   };
 
   return (
-    <article className="intellecta-card p-6 flex flex-col justify-between min-h-[350px] h-full dark:text-slate-100 relative overflow-hidden">
+    <article className="dashboard-card p-6 flex flex-col justify-between min-h-[350px] h-full dark:text-slate-100 relative overflow-hidden">
       {/* Header */}
       <div className="flex items-start justify-between pb-3 border-b border-black/[0.05] dark:border-white/[0.06]">
         <div>
@@ -189,7 +199,7 @@ export default function QuickLaunchpadCard({
         <button
           type="button"
           onClick={() => setShowQuickInput(true)}
-          className="p-3 rounded-2xl bg-[#18181B] hover:bg-black text-white dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100 text-left transition active:scale-95 cursor-pointer flex flex-col justify-between gap-2 shadow-sm"
+          className="p-3 rounded-2xl bg-[#18181B] hover:bg-black text-white dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100 text-left transition-transform active:scale-95 cursor-pointer flex flex-col justify-between gap-2 shadow-sm"
         >
           <div className="w-7 h-7 rounded-xl bg-white/15 dark:bg-slate-900/10 grid place-items-center">
             <Plus className="w-4 h-4" />
@@ -203,7 +213,7 @@ export default function QuickLaunchpadCard({
         <button
           type="button"
           onClick={onGoNotes || onGoInput}
-          className="p-3 rounded-2xl bg-slate-100/90 hover:bg-slate-200/80 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-900 dark:text-white text-left transition active:scale-95 cursor-pointer flex flex-col justify-between gap-2 border border-slate-200/60 dark:border-slate-700"
+          className="p-3 rounded-2xl bg-slate-100/90 hover:bg-slate-200/80 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-900 dark:text-white text-left transition-transform active:scale-95 cursor-pointer flex flex-col justify-between gap-2 border border-slate-200/60 dark:border-slate-700"
         >
           <div className="w-7 h-7 rounded-xl bg-[#DCD4FB] text-slate-900 grid place-items-center">
             <StickyNote className="w-4 h-4" />
@@ -217,7 +227,7 @@ export default function QuickLaunchpadCard({
         <button
           type="button"
           onClick={onGoCalendar || onGoInput}
-          className="p-3 rounded-2xl bg-slate-100/90 hover:bg-slate-200/80 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-900 dark:text-white text-left transition active:scale-95 cursor-pointer flex flex-col justify-between gap-2 border border-slate-200/60 dark:border-slate-700"
+          className="p-3 rounded-2xl bg-slate-100/90 hover:bg-slate-200/80 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-900 dark:text-white text-left transition-transform active:scale-95 cursor-pointer flex flex-col justify-between gap-2 border border-slate-200/60 dark:border-slate-700"
         >
           <div className="w-7 h-7 rounded-xl bg-[#D2F27C] text-slate-900 grid place-items-center">
             <Calendar className="w-4 h-4" />
@@ -231,7 +241,7 @@ export default function QuickLaunchpadCard({
         <button
           type="button"
           onClick={handleCopyPortalLink}
-          className="p-3 rounded-2xl bg-slate-100/90 hover:bg-slate-200/80 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-900 dark:text-white text-left transition active:scale-95 cursor-pointer flex flex-col justify-between gap-2 border border-slate-200/60 dark:border-slate-700"
+          className="p-3 rounded-2xl bg-slate-100/90 hover:bg-slate-200/80 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-900 dark:text-white text-left transition-transform active:scale-95 cursor-pointer flex flex-col justify-between gap-2 border border-slate-200/60 dark:border-slate-700"
         >
           <div className="w-7 h-7 rounded-xl bg-sky-100 dark:bg-sky-900/50 text-sky-700 dark:text-sky-300 grid place-items-center">
             <Link2 className="w-4 h-4" />
@@ -261,7 +271,7 @@ export default function QuickLaunchpadCard({
 
       {/* Quick Input Modal Overlay */}
       {showQuickInput && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
           <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 max-w-md w-full shadow-2xl border border-slate-200 dark:border-slate-800 space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="font-extrabold text-base text-slate-900 dark:text-white">
@@ -280,17 +290,16 @@ export default function QuickLaunchpadCard({
                 <label className="block text-[11px] font-bold text-slate-500 uppercase mb-1">
                   Proyek Terkait
                 </label>
-                <select
+                <CustomSelect
+                  variant="form"
                   value={projectId}
-                  onChange={(e) => setProjectId(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-900 dark:text-white"
-                >
-                  {projects.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.nama_proyek} ({p.divisi})
-                    </option>
-                  ))}
-                </select>
+                  onChange={setProjectId}
+                  options={projects.map((p) => ({
+                    value: String(p.id),
+                    label: `${p.nama_proyek} (${p.divisi})`,
+                  }))}
+                  placeholder="Pilih Proyek Terkait..."
+                />
               </div>
 
               <div>

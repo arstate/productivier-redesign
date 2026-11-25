@@ -1,10 +1,15 @@
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
+import { requireAuth } from '@/lib/auth';
 
 export async function GET(req: Request) {
+  const auth = requireAuth(req);
+  if ('error' in auth) return auth.error;
+
   const { searchParams } = new URL(req.url);
   const month = searchParams.get('month'); // e.g. '2026-11'
   const projectId = searchParams.get('project_id');
+  const mine = searchParams.get('mine') === 'true';
 
   let sql = `
     SELECT c.*, u.nama as user_nama, p.nama_proyek as project_nama
@@ -23,6 +28,10 @@ export async function GET(req: Request) {
     sql += ' AND c.project_id = ?';
     params.push(Number(projectId));
   }
+  if (mine) {
+    sql += ' AND c.user_id = ?';
+    params.push(auth.user.id);
+  }
 
   sql += ' ORDER BY c.date ASC, c.start_time ASC';
 
@@ -30,19 +39,29 @@ export async function GET(req: Request) {
   const events = db.prepare(sql).all(...params);
 
   // Also fetch project deadlines to show as milestone events
-  const projectDeadlines = db.prepare(`
+  let deadlineSql = `
     SELECT p.id as project_id, p.nama_proyek as title, p.deadline as date, p.divisi, 'deadline' as category, '#F87171' as color
     FROM projects p
     WHERE p.deadline IS NOT NULL AND p.deadline != ''
-  `).all();
+  `;
+  const deadlineParams: Array<number> = [];
+  if (projectId) {
+    deadlineSql += ' AND p.id = ?';
+    deadlineParams.push(Number(projectId));
+  }
+
+  const projectDeadlines = db.prepare(deadlineSql).all(...deadlineParams);
 
   return NextResponse.json({ events, projectDeadlines });
 }
 
 export async function POST(req: Request) {
   try {
+    const auth = requireAuth(req);
+    if ('error' in auth) return auth.error;
+
     const {
-      user_id, title, description, date, start_time, end_time, category, color, project_id
+      title, description, date, start_time, end_time, category, color, project_id
     } = await req.json();
 
     if (!title || !title.trim() || !date) {
@@ -54,8 +73,8 @@ export async function POST(req: Request) {
       INSERT INTO calendar_events (user_id, title, description, date, start_time, end_time, category, color, project_id)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
-      user_id ? Number(user_id) : null,
-      title.trim(),
+      auth.user.id,
+      title.trim().slice(0, 200),
       (description || '').trim(),
       date.trim(),
       (start_time || '09:00').trim(),

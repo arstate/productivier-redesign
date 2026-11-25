@@ -17,14 +17,15 @@ import { ProjectClientNoteType } from "@/types";
 
 interface ClientNotesSectionProps {
   projectId: number;
+  shareToken?: string;
   initialNotes?: ProjectClientNoteType[];
 }
 
 const CATEGORIES = [
-  { id: "feedback", label: "Feedback Desain & Konten", icon: MessageSquareQuote, color: "bg-blue-100 text-blue-800" },
+  { id: "feedback", label: "Feedback Desain", icon: MessageSquareQuote, color: "bg-blue-100 text-blue-800" },
   { id: "revisi", label: "Request Revisi", icon: AlertCircle, color: "bg-amber-100 text-amber-800" },
-  { id: "pertanyaan", label: "Pertanyaan / Kendala", icon: HelpCircle, color: "bg-purple-100 text-purple-800" },
-  { id: "apresiasi", label: "Apresiasi & Konfirmasi", icon: Sparkles, color: "bg-emerald-100 text-emerald-800" },
+  { id: "pertanyaan", label: "Pertanyaan", icon: HelpCircle, color: "bg-purple-100 text-purple-800" },
+  { id: "apresiasi", label: "Apresiasi", icon: Sparkles, color: "bg-emerald-100 text-emerald-800" },
 ] as const;
 
 function formatSafeDate(dateStr: string): string {
@@ -43,7 +44,7 @@ function formatSafeDate(dateStr: string): string {
   }
 }
 
-export default function ClientNotesSection({ projectId, initialNotes = [] }: ClientNotesSectionProps) {
+export default function ClientNotesSection({ projectId, shareToken = "", initialNotes = [] }: ClientNotesSectionProps) {
   const [notes, setNotes] = useState<ProjectClientNoteType[]>(initialNotes);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -58,7 +59,8 @@ export default function ClientNotesSection({ projectId, initialNotes = [] }: Cli
   const fetchNotes = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/projects/${projectId}/client-notes`);
+      const qs = shareToken ? `?token=${encodeURIComponent(shareToken)}` : "";
+      const res = await fetch(`/api/projects/${projectId}/client-notes${qs}`);
       const data = await res.json();
       if (res.ok && data.clientNotes) {
         setNotes(data.clientNotes);
@@ -71,10 +73,24 @@ export default function ClientNotesSection({ projectId, initialNotes = [] }: Cli
   };
 
   useEffect(() => {
-    if (initialNotes.length === 0) {
-      fetchNotes();
-    }
-  }, [projectId]);
+    if (initialNotes.length > 0) return;
+    let active = true;
+    (async () => {
+      try {
+        const qs = shareToken ? `?token=${encodeURIComponent(shareToken)}` : "";
+        const res = await fetch(`/api/projects/${projectId}/client-notes${qs}`);
+        const data = await res.json();
+        if (active && res.ok && data.clientNotes) {
+          setNotes(data.clientNotes);
+        }
+      } catch (e) {
+        console.error("Gagal memuat catatan klien:", e);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [projectId, shareToken, initialNotes.length]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -86,7 +102,10 @@ export default function ClientNotesSection({ projectId, initialNotes = [] }: Cli
     try {
       const res = await fetch(`/api/projects/${projectId}/client-notes`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(shareToken ? { "x-share-token": shareToken } : {}),
+        },
         body: JSON.stringify({
           author_name: authorName.trim() || "Klien Tamu",
           author_role: "client",
@@ -162,7 +181,7 @@ export default function ClientNotesSection({ projectId, initialNotes = [] }: Cli
     : notes.filter((item) => item.category === activeFilter);
 
   return (
-    <div className="intellecta-card p-5 sm:p-6 bg-white/95 backdrop-blur-md shadow-sm border border-slate-200/80 space-y-5">
+    <div className="dashboard-card p-5 sm:p-6 bg-white/95 backdrop-blur-md shadow-sm border border-slate-200/80 space-y-5">
       {/* SECTION HEADER */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3.5 border-b border-slate-200/80">
         <div>
@@ -301,7 +320,7 @@ export default function ClientNotesSection({ projectId, initialNotes = [] }: Cli
           <button
             type="button"
             onClick={() => setActiveFilter("all")}
-            className={`px-2.5 py-1 rounded-lg font-bold text-[11px] transition shrink-0 cursor-pointer ${
+            className={`px-3 py-1.5 rounded-full font-bold text-xs transition shrink-0 cursor-pointer ${
               activeFilter === "all"
                 ? "bg-slate-900 text-white"
                 : "bg-slate-100 text-slate-600 hover:bg-slate-200"
@@ -316,7 +335,7 @@ export default function ClientNotesSection({ projectId, initialNotes = [] }: Cli
                 type="button"
                 key={cat.id}
                 onClick={() => setActiveFilter(cat.id)}
-                className={`px-2.5 py-1 rounded-lg font-bold text-[11px] transition shrink-0 cursor-pointer flex items-center gap-1 ${
+                className={`px-3 py-1.5 rounded-full font-bold text-xs transition shrink-0 cursor-pointer flex items-center gap-1 ${
                   activeFilter === cat.id
                     ? "bg-slate-900 text-white"
                     : "bg-slate-100 text-slate-600 hover:bg-slate-200"
@@ -364,12 +383,12 @@ export default function ClientNotesSection({ projectId, initialNotes = [] }: Cli
                       </div>
 
                       {isTeam && (
-                        <span className="px-2 py-0.5 rounded-full bg-[#1C1D21] text-[#D2F27C] text-[9px] font-black uppercase tracking-wider">
+                        <span className="px-2 py-0.5 rounded-full bg-[#1C1D21] text-[#D2F27C] text-[10px] font-black uppercase tracking-wider">
                           Tim Productivier
                         </span>
                       )}
 
-                      <span className={`px-2 py-0.5 rounded-md text-[9px] font-extrabold uppercase tracking-wider ${cat.color}`}>
+                      <span className={`px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wider ${cat.color}`}>
                         {cat.label}
                       </span>
                     </div>

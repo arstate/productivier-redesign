@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { UserType, ProjectType, RealisasiType, CalendarEventType } from "@/types";
 import CustomSelect, { CustomSelectOption } from "@/components/ui/CustomSelect";
+import ConfirmModal from "@/components/ui/ConfirmModal";
 
 const SPRING = { type: "spring" as const, stiffness: 420, damping: 32 };
 
@@ -54,7 +55,16 @@ export default function CalendarTab({
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDateStr, setSelectedDateStr] = useState<string>(new Date().toISOString().slice(0, 10));
   const [events, setEvents] = useState<CalendarEventType[]>([]);
-  const [selectedProjectId, setSelectedProjectId] = useState<string>("all");
+  const [selectedProjectId, setSelectedProjectId] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      const p = new URLSearchParams(window.location.search).get("project_id") || sessionStorage.getItem("productivier_calendar_project_id");
+      if (p) {
+        sessionStorage.removeItem("productivier_calendar_project_id");
+        return p;
+      }
+    }
+    return "all";
+  });
   const [filterCategory, setFilterCategory] = useState<string>("all");
   const [viewMode, setViewMode] = useState<"month" | "timeline">("month");
   const [showAddModal, setShowAddModal] = useState(false);
@@ -79,6 +89,8 @@ export default function CalendarTab({
   const [editCategory, setEditCategory] = useState<"activity" | "meeting" | "milestone" | "deadline">("activity");
   const [editProjId, setEditProjId] = useState<string>("");
   const [updating, setUpdating] = useState(false);
+  const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -96,12 +108,35 @@ export default function CalendarTab({
   };
 
   useEffect(() => {
-    loadCalendarEvents();
+    const handleOpenProject = (e: Event) => {
+      const customEvent = e as CustomEvent<{ projectId?: number }>;
+      if (customEvent.detail?.projectId) {
+        setSelectedProjectId(String(customEvent.detail.projectId));
+      }
+    };
+    window.addEventListener("productivier:open_project", handleOpenProject);
+    return () => {
+      window.removeEventListener("productivier:open_project", handleOpenProject);
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    const monthPrefix = `${year}-${String(month + 1).padStart(2, "0")}`;
+    const url = `/api/calendar?month=${monthPrefix}${selectedProjectId !== "all" ? `&project_id=${selectedProjectId}` : ""}`;
+    fetch(url)
+      .then((res) => res.json())
+      .then((data) => {
+        if (active) setEvents(data.events || []);
+      })
+      .catch((e) => console.error("Gagal memuat jadwal kalender", e));
+
     const handleRefresh = () => {
       loadCalendarEvents();
     };
     window.addEventListener("productivier:refresh_data", handleRefresh);
     return () => {
+      active = false;
       window.removeEventListener("productivier:refresh_data", handleRefresh);
     };
   }, [year, month, selectedProjectId]);
@@ -222,7 +257,7 @@ export default function CalendarTab({
     setEditDate(ev.date);
     setEditStartTime(ev.start_time || "09:00");
     setEditEndTime(ev.end_time || "10:30");
-    setEditCategory((ev.category as any) || "activity");
+    setEditCategory((ev.category as CalendarEventType["category"]) || "activity");
     setEditProjId(ev.project_id ? String(ev.project_id) : "");
   };
 
@@ -260,22 +295,30 @@ export default function CalendarTab({
     }
   };
 
-  const handleDeleteEvent = async (id: number) => {
+  const handleDeleteEvent = (id: number) => {
     if (id >= 900000) {
       showToast("Deadline proyek diatur di tab Proyek");
       return;
     }
-    if (!confirm("Hapus jadwal ini?")) return;
+    setDeleteTargetId(id);
+  };
+
+  const executeDeleteEvent = async () => {
+    if (deleteTargetId === null) return;
+    setDeleting(true);
     try {
-      const res = await fetch(`/api/calendar/${id}`, { method: "DELETE" });
+      const res = await fetch(`/api/calendar/${deleteTargetId}`, { method: "DELETE" });
       if (res.ok) {
         showToast("Jadwal dihapus");
+        setDeleteTargetId(null);
         await loadCalendarEvents();
       } else {
         showToast("Gagal menghapus jadwal");
       }
     } catch {
       showToast("Terjadi kesalahan jaringan");
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -379,7 +422,7 @@ export default function CalendarTab({
       {/* Main Grid: Left Calendar View (8 Cols) + Right Selected Day Agenda (4 Cols) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Left Column: Calendar / Timeline Widget */}
-        <div className="lg:col-span-8 intellecta-card p-6 sm:p-8 dark:text-slate-100 space-y-5">
+        <div className="lg:col-span-8 dashboard-card p-6 sm:p-8 dark:text-slate-100 space-y-5">
           {/* Calendar Month Navigation Header */}
           <div className="flex items-center justify-between pb-3 border-b border-slate-200/80 dark:border-slate-700/80">
             <div className="flex items-center gap-3">
@@ -597,7 +640,22 @@ export default function CalendarTab({
                           </div>
                         ))}
                         {matchingEvents.length === 0 && (
-                          <div className="h-6 border-b border-dashed border-slate-200/50 dark:border-slate-800/50" />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setNewDate(selectedDateStr);
+                              setNewStartTime(hour);
+                              setNewEndTime(`${String(Math.min(23, hourNum + 1)).padStart(2, "0")}:00`);
+                              setShowAddModal(true);
+                            }}
+                            className="w-full min-h-[36px] border border-dashed border-slate-200/70 dark:border-slate-800 rounded-xl px-3 text-left text-xs text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition flex items-center justify-between group/slot cursor-pointer"
+                          >
+                            <span>Slot tersedia</span>
+                            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-500 group-hover/slot:text-slate-900 dark:group-hover/slot:text-[#D2F27C]">
+                              <Plus className="w-3.5 h-3.5" />
+                              Tambah agenda
+                            </span>
+                          </button>
                         )}
                       </div>
                     </div>
@@ -609,7 +667,7 @@ export default function CalendarTab({
         </div>
 
         {/* Right Column: Selected Day Detail Agenda & Logged Realisasi (4 Cols) */}
-        <div className="lg:col-span-4 intellecta-card p-6 sm:p-7 dark:text-slate-100 space-y-5">
+        <div className="lg:col-span-4 dashboard-card p-6 sm:p-7 dark:text-slate-100 space-y-5">
           <div className="pb-3 border-b border-slate-200/80 dark:border-slate-700/80">
             <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
               Agenda Hari Terpilih
@@ -749,7 +807,7 @@ export default function CalendarTab({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4"
+            className="fixed inset-0 z-[70] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4"
             onClick={() => setShowAddModal(false)}
           >
             <motion.div
@@ -757,7 +815,7 @@ export default function CalendarTab({
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.95, y: 10 }}
               onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-md intellecta-card p-6 sm:p-8 shadow-2xl dark:text-slate-100"
+              className="w-full max-w-md dashboard-card p-6 sm:p-8 shadow-2xl dark:text-slate-100"
             >
               <div className="flex items-center justify-between pb-4 border-b border-slate-200/80 dark:border-slate-700 mb-5">
                 <div>
@@ -811,7 +869,7 @@ export default function CalendarTab({
                     </label>
                     <CustomSelect
                       value={newCategory}
-                      onChange={(v) => setNewCategory(v as any)}
+                      onChange={(v) => setNewCategory(v as CalendarEventType["category"])}
                       options={categoryOptions}
                       variant="form"
                     />
@@ -893,7 +951,7 @@ export default function CalendarTab({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4"
+            className="fixed inset-0 z-[70] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4"
             onClick={() => setEditingEvent(null)}
           >
             <motion.div
@@ -901,7 +959,7 @@ export default function CalendarTab({
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.95, y: 10 }}
               onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-md intellecta-card p-6 sm:p-8 shadow-2xl dark:text-slate-100"
+              className="w-full max-w-md dashboard-card p-6 sm:p-8 shadow-2xl dark:text-slate-100"
             >
               <div className="flex items-center justify-between pb-4 border-b border-slate-200/80 dark:border-slate-700 mb-5">
                 <div>
@@ -955,7 +1013,7 @@ export default function CalendarTab({
                     </label>
                     <CustomSelect
                       value={editCategory}
-                      onChange={(v) => setEditCategory(v as any)}
+                      onChange={(v) => setEditCategory(v as CalendarEventType["category"])}
                       options={categoryOptions}
                       variant="form"
                     />
@@ -1029,6 +1087,16 @@ export default function CalendarTab({
           </motion.div>
         )}
       </AnimatePresence>
+
+      <ConfirmModal
+        isOpen={deleteTargetId !== null}
+        title="Hapus Agenda Kalender"
+        message="Yakin ingin menghapus jadwal agenda ini dari kalender tim?"
+        confirmLabel="Hapus Agenda"
+        loading={deleting}
+        onConfirm={executeDeleteEvent}
+        onCancel={() => !deleting && setDeleteTargetId(null)}
+      />
     </div>
   );
 }
