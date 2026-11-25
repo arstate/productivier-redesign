@@ -1,3 +1,4 @@
+import type { Row } from '@/types/db-rows';
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { requireAuth } from '@/lib/auth';
@@ -42,7 +43,7 @@ export async function GET(
       LEFT JOIN users u ON p.pic_id = u.id
       WHERE cgp.group_id = ?
       ORDER BY p.id ASC
-    `).all(groupId) as any[];
+    `).all(groupId) as Row[];
 
     const connectedProjects = rows.map((p) => {
       const target = Number(p.target_total) || 0;
@@ -83,7 +84,7 @@ export async function POST(
       return NextResponse.json({ error: 'Grup tidak ditemukan' }, { status: 404 });
     }
 
-    const project = db.prepare('SELECT id, nama_proyek, divisi FROM projects WHERE id = ?').get(Number(project_id)) as any;
+    const project = db.prepare('SELECT id, nama_proyek, divisi FROM projects WHERE id = ?').get(Number(project_id)) as Row;
     if (!project) {
       return NextResponse.json({ error: 'Proyek tidak ditemukan' }, { status: 404 });
     }

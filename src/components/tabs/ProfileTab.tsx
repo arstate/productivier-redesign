@@ -7,7 +7,6 @@ import {
   Search,
   CheckCircle2,
   Clock,
-  Sparkles,
   ShieldCheck,
   Edit3,
   X,

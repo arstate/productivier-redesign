@@ -1,3 +1,4 @@
+import type { Row } from '@/types/db-rows';
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { requireAuth } from '@/lib/auth';
@@ -15,7 +16,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     const body = await request.json();
     const db = getDb();
 
-    const existing = db.prepare('SELECT * FROM personal_todos WHERE id = ?').get(id) as any;
+    const existing = db.prepare('SELECT * FROM personal_todos WHERE id = ?').get(id) as Row;
     if (!existing) {
       return NextResponse.json({ error: 'To-do tidak ditemukan' }, { status: 404 });
     }
@@ -24,7 +25,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     }
 
     const updates: string[] = [];
-    const values: any[] = [];
+    const values: (string | number | null)[] = [];
 
     if (body.done !== undefined) {
       updates.push('done = ?');
@@ -48,7 +49,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       db.prepare(`UPDATE personal_todos SET ${updates.join(', ')} WHERE id = ?`).run(...values);
     }
 
-    const updated = db.prepare('SELECT * FROM personal_todos WHERE id = ?').get(id) as any;
+    const updated = db.prepare('SELECT * FROM personal_todos WHERE id = ?').get(id) as Row;
 
     return NextResponse.json({
       success: true,
@@ -57,9 +58,9 @@ export async function PATCH(request: Request, context: RouteContext) {
         done: Boolean(updated.done),
       },
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error PATCH /api/todos/[id]:', error);
-    return NextResponse.json({ error: error.message || 'Gagal memperbarui to-do' }, { status: 500 });
+    return NextResponse.json({ error: (error instanceof Error ? error.message : '') || 'Gagal memperbarui to-do' }, { status: 500 });
   }
 }
 
@@ -83,10 +84,10 @@ export async function DELETE(request: Request, context: RouteContext) {
 
     return NextResponse.json({
       success: true,
-      deleted: (res as any).changes > 0,
+      deleted: (res as Row).changes > 0,
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error DELETE /api/todos/[id]:', error);
-    return NextResponse.json({ error: error.message || 'Gagal menghapus to-do' }, { status: 500 });
+    return NextResponse.json({ error: (error instanceof Error ? error.message : '') || 'Gagal menghapus to-do' }, { status: 500 });
   }
 }

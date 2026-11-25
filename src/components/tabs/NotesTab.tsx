@@ -12,10 +12,7 @@ import {
   CheckSquare,
   Square,
   X,
-  Sparkles,
-  Tag,
   Check,
-  FolderKanban,
   Pencil,
 } from "lucide-react";
 import { UserType, ProjectType, NoteType } from "@/types";
@@ -123,6 +120,8 @@ export default function NotesTab({ user, projects, showToast }: NotesTabProps) {
       active = false;
       window.removeEventListener("productivier:refresh_data", handleRefresh);
     };
+  // Efek mount/trigger tunggal: fungsi loader sengaja tidak jadi dependency agar tidak refetch tiap render.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedProjectId]);
 
   // Extract all unique tags
@@ -414,9 +413,6 @@ export default function NotesTab({ user, projects, showToast }: NotesTabProps) {
       {/* Responsive Masonry Grid for Notes */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredNotes.map((n) => {
-          const isLime = n.color === "#D2F27C";
-          const isLavender = n.color === "#DCD4FB";
-          const isSlate = n.color === "#CBD5E1";
 
           return (
             <motion.div

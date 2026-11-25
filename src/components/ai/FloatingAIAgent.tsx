@@ -11,11 +11,6 @@ import {
   Check,
   AlertCircle,
   Minimize2,
-  Maximize2,
-  Move,
-  RefreshCw,
-  Clock,
-  Layers,
   ChevronDown,
   ChevronUp,
   Brain,
@@ -23,10 +18,24 @@ import {
   Microscope,
   Compass,
 } from "lucide-react";
-import { UserType, AIMessageType, AIActionRequestType } from "@/types";
-import ProductivierLogo from "@/components/ui/ProductivierLogo";
+import { UserType, AIMessageType } from "@/types";
 import MarkdownText from "@/components/ui/MarkdownText";
 import AIMascot from "@/components/ui/AIMascot";
+
+
+// Web Speech API belum ada di lib.dom TypeScript; deklarasi minimal yang dipakai saja.
+interface SpeechRecognitionInstance {
+  lang: string;
+  interimResults: boolean;
+  maxAlternatives: number;
+  onstart: (() => void) | null;
+  onend: (() => void) | null;
+  onerror: ((e: unknown) => void) | null;
+  onresult: ((event: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
+  start: () => void;
+  stop: () => void;
+}
+type SpeechRecognitionCtor = new () => SpeechRecognitionInstance;
 
 interface FloatingAIAgentProps {
   user: UserType;
@@ -207,9 +216,13 @@ export default function FloatingAIAgent({
   };
 
   useEffect(() => {
+    // Polling ke API eksternal saat mount: setState terjadi setelah fetch (async), aman.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchPendingActions();
     const interval = setInterval(fetchPendingActions, 15000);
     return () => clearInterval(interval);
+  // Efek mount/trigger tunggal: fungsi loader sengaja tidak jadi dependency agar tidak refetch tiap render.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user.id]);
 
   const toggleThinkingBox = (msgId: string) => {
@@ -227,6 +240,8 @@ export default function FloatingAIAgent({
     sendingRef.current = true;
 
     const userMessage: AIMessageType = {
+      // Date.now di event handler (bukan render) aman; hanya untuk key unik pesan.
+      // eslint-disable-next-line react-hooks/purity
       id: String(Date.now()),
       role: "user",
       content: text,
@@ -261,6 +276,7 @@ export default function FloatingAIAgent({
         throw new Error(data.error || "Gagal menghubungi model AI");
       }
 
+      // eslint-disable-next-line react-hooks/purity
       const aiMsgId = String(Date.now() + 1);
       const aiMsg: AIMessageType = {
         id: aiMsgId,
@@ -385,8 +401,12 @@ export default function FloatingAIAgent({
   // Voice Input (Web Speech API)
   const handleVoiceInput = () => {
     if (typeof window === "undefined") return;
+    const speechWindow = window as unknown as {
+      SpeechRecognition?: SpeechRecognitionCtor;
+      webkitSpeechRecognition?: SpeechRecognitionCtor;
+    };
     const SpeechRecognition =
-      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      speechWindow.SpeechRecognition || speechWindow.webkitSpeechRecognition;
 
     if (!SpeechRecognition) {
       showToast("Browser Anda belum mendukung input suara.");
@@ -409,7 +429,7 @@ export default function FloatingAIAgent({
         showToast("Mendengarkan suara Anda...");
       };
 
-      recognition.onresult = (event: any) => {
+      recognition.onresult = (event: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => {
         const transcript = event.results[0][0].transcript;
         if (transcript) {
           setInputMsg(transcript);

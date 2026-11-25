@@ -1,3 +1,5 @@
+import type { Row } from '@/types/db-rows';
+import type { DatabaseSync } from 'node:sqlite';
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { requireAuth } from '@/lib/auth';
@@ -99,7 +101,7 @@ export async function POST(req: Request) {
 
 
 export function executeActionRequest(
-  db: any,
+  db: DatabaseSync,
   actionRequestId: number,
   status: string = 'approved',
   userIdParam?: number
@@ -131,7 +133,7 @@ id: number;
       }
 
       if (status === 'approved') {
-        let actionPayload: any = {};
+        let actionPayload: Row = {};
         try {
           actionPayload = JSON.parse(existingReq.payload_json);
         } catch {
@@ -208,7 +210,7 @@ id: number;
           let nId = actionPayload.note_id || actionPayload.id ? Number(actionPayload.note_id || actionPayload.id) : null;
           if (!nId && (actionPayload.title || actionPayload.target_name)) {
             const titleSearch = (actionPayload.title || actionPayload.target_name).toLowerCase();
-            const nRow = db.prepare('SELECT id, title FROM notes WHERE LOWER(title) LIKE ?').get(`%${titleSearch}%`) as any;
+            const nRow = db.prepare('SELECT id, title FROM notes WHERE LOWER(title) LIKE ?').get(`%${titleSearch}%`) as Row;
             if (nRow) nId = nRow.id;
           }
           if (nId) {
@@ -230,7 +232,7 @@ id: number;
               nId
             );
             resultId = nId;
-            const updatedRow = db.prepare('SELECT title FROM notes WHERE id = ?').get(nId) as any;
+            const updatedRow = db.prepare('SELECT title FROM notes WHERE id = ?').get(nId) as Row;
             executionSummary = `Catatan "${updatedRow ? updatedRow.title : 'ID ' + nId}" berhasil diperbarui.`;
           }
         } else if (existingReq.action_type === 'create_event') {
@@ -359,7 +361,7 @@ id: number;
         } else if (existingReq.action_type === 'delete_chat_group' || existingReq.action_type === 'delete_all_chat_groups') {
           const isAll = existingReq.action_type === 'delete_all_chat_groups' || Boolean(actionPayload.all);
           if (isAll) {
-            const count = (db.prepare('SELECT COUNT(*) as c FROM chat_groups').get() as any)?.c || 0;
+            const count = (db.prepare('SELECT COUNT(*) as c FROM chat_groups').get() as Row)?.c || 0;
             db.prepare('DELETE FROM chat_messages').run();
             db.prepare('DELETE FROM chat_group_members').run();
             db.prepare('DELETE FROM chat_groups').run();
@@ -368,14 +370,14 @@ id: number;
             let gId = actionPayload.group_id ? Number(actionPayload.group_id) : null;
             if (!gId && (actionPayload.name || actionPayload.target_name)) {
               const query = (actionPayload.name || actionPayload.target_name).toLowerCase();
-              const gRow = db.prepare('SELECT id, name FROM chat_groups WHERE LOWER(name) LIKE ?').get(`%${query}%`) as any;
+              const gRow = db.prepare('SELECT id, name FROM chat_groups WHERE LOWER(name) LIKE ?').get(`%${query}%`) as Row;
               if (gRow) {
                 gId = gRow.id;
                 actionPayload.name = gRow.name;
               }
             }
             if (gId) {
-              const gRow = db.prepare('SELECT name FROM chat_groups WHERE id = ?').get(gId) as any;
+              const gRow = db.prepare('SELECT name FROM chat_groups WHERE id = ?').get(gId) as Row;
               const gName = gRow ? gRow.name : (actionPayload.name || 'ID ' + gId);
               db.prepare('DELETE FROM chat_messages WHERE group_id = ?').run(gId);
               db.prepare('DELETE FROM chat_group_members WHERE group_id = ?').run(gId);
@@ -388,7 +390,7 @@ id: number;
         } else if (existingReq.action_type === 'delete_project' || existingReq.action_type === 'delete_all_projects') {
           const isAll = existingReq.action_type === 'delete_all_projects' || Boolean(actionPayload.all);
           if (isAll) {
-            const count = (db.prepare('SELECT COUNT(*) as c FROM projects').get() as any)?.c || 0;
+            const count = (db.prepare('SELECT COUNT(*) as c FROM projects').get() as Row)?.c || 0;
             db.prepare('DELETE FROM project_links').run();
             db.prepare('DELETE FROM project_client_notes').run();
             db.prepare('DELETE FROM realisasi').run();
@@ -398,14 +400,14 @@ id: number;
             let pId = actionPayload.project_id ? Number(actionPayload.project_id) : null;
             if (!pId && (actionPayload.name || actionPayload.nama_proyek || actionPayload.target_name)) {
               const query = (actionPayload.name || actionPayload.nama_proyek || actionPayload.target_name).toLowerCase();
-              const pRow = db.prepare('SELECT id, nama_proyek FROM projects WHERE LOWER(nama_proyek) LIKE ?').get(`%${query}%`) as any;
+              const pRow = db.prepare('SELECT id, nama_proyek FROM projects WHERE LOWER(nama_proyek) LIKE ?').get(`%${query}%`) as Row;
               if (pRow) {
                 pId = pRow.id;
                 actionPayload.name = pRow.nama_proyek;
               }
             }
             if (pId) {
-              const pRow = db.prepare('SELECT nama_proyek FROM projects WHERE id = ?').get(pId) as any;
+              const pRow = db.prepare('SELECT nama_proyek FROM projects WHERE id = ?').get(pId) as Row;
               const pName = pRow ? pRow.nama_proyek : (actionPayload.name || 'ID ' + pId);
               db.prepare('DELETE FROM project_links WHERE project_id = ?').run(pId);
               db.prepare('DELETE FROM project_client_notes WHERE project_id = ?').run(pId);
@@ -419,21 +421,21 @@ id: number;
         } else if (existingReq.action_type === 'delete_task' || existingReq.action_type === 'delete_all_tasks') {
           const isAll = existingReq.action_type === 'delete_all_tasks' || Boolean(actionPayload.all);
           if (isAll) {
-            const count = (db.prepare('SELECT COUNT(*) as c FROM realisasi').get() as any)?.c || 0;
+            const count = (db.prepare('SELECT COUNT(*) as c FROM realisasi').get() as Row)?.c || 0;
             db.prepare('DELETE FROM realisasi').run();
             executionSummary = `Berhasil menghapus seluruh tugas tim (${count} tugas telah dihapus).`;
           } else {
             let tId = actionPayload.task_id ? Number(actionPayload.task_id) : null;
             if (!tId && (actionPayload.aktivitas || actionPayload.name || actionPayload.title || actionPayload.target_name)) {
               const query = (actionPayload.aktivitas || actionPayload.name || actionPayload.title || actionPayload.target_name).toLowerCase();
-              const tRow = db.prepare('SELECT id, aktivitas FROM realisasi WHERE LOWER(aktivitas) LIKE ?').get(`%${query}%`) as any;
+              const tRow = db.prepare('SELECT id, aktivitas FROM realisasi WHERE LOWER(aktivitas) LIKE ?').get(`%${query}%`) as Row;
               if (tRow) {
                 tId = tRow.id;
                 actionPayload.aktivitas = tRow.aktivitas;
               }
             }
             if (tId) {
-              const tRow = db.prepare('SELECT aktivitas FROM realisasi WHERE id = ?').get(tId) as any;
+              const tRow = db.prepare('SELECT aktivitas FROM realisasi WHERE id = ?').get(tId) as Row;
               const tName = tRow ? tRow.aktivitas : (actionPayload.aktivitas || 'ID ' + tId);
               db.prepare('DELETE FROM realisasi WHERE id = ?').run(tId);
               executionSummary = `Tugas "${tName}" berhasil dihapus.`;
@@ -444,21 +446,21 @@ id: number;
         } else if (existingReq.action_type === 'delete_note' || existingReq.action_type === 'delete_all_notes') {
           const isAll = existingReq.action_type === 'delete_all_notes' || Boolean(actionPayload.all);
           if (isAll) {
-            const count = (db.prepare('SELECT COUNT(*) as c FROM notes').get() as any)?.c || 0;
+            const count = (db.prepare('SELECT COUNT(*) as c FROM notes').get() as Row)?.c || 0;
             db.prepare('DELETE FROM notes').run();
             executionSummary = `Berhasil menghapus seluruh catatan memo (${count} memo telah dihapus).`;
           } else {
             let nId = actionPayload.note_id || actionPayload.id ? Number(actionPayload.note_id || actionPayload.id) : null;
             if (!nId && (actionPayload.title || actionPayload.name || actionPayload.target_name)) {
               const query = (actionPayload.title || actionPayload.name || actionPayload.target_name).toLowerCase();
-              const nRow = db.prepare('SELECT id, title FROM notes WHERE LOWER(title) LIKE ?').get(`%${query}%`) as any;
+              const nRow = db.prepare('SELECT id, title FROM notes WHERE LOWER(title) LIKE ?').get(`%${query}%`) as Row;
               if (nRow) {
                 nId = nRow.id;
                 actionPayload.title = nRow.title;
               }
             }
             if (nId) {
-              const nRow = db.prepare('SELECT title FROM notes WHERE id = ?').get(nId) as any;
+              const nRow = db.prepare('SELECT title FROM notes WHERE id = ?').get(nId) as Row;
               const nTitle = nRow ? nRow.title : (actionPayload.title || 'ID ' + nId);
               db.prepare('DELETE FROM notes WHERE id = ?').run(nId);
               executionSummary = `Catatan "${nTitle}" berhasil dihapus.`;
@@ -469,21 +471,21 @@ id: number;
         } else if (existingReq.action_type === 'delete_calendar_event' || existingReq.action_type === 'delete_all_calendar_events') {
           const isAll = existingReq.action_type === 'delete_all_calendar_events' || Boolean(actionPayload.all);
           if (isAll) {
-            const count = (db.prepare('SELECT COUNT(*) as c FROM calendar_events').get() as any)?.c || 0;
+            const count = (db.prepare('SELECT COUNT(*) as c FROM calendar_events').get() as Row)?.c || 0;
             db.prepare('DELETE FROM calendar_events').run();
             executionSummary = `Berhasil menghapus seluruh agenda kalender (${count} agenda telah dihapus).`;
           } else {
             let eId = actionPayload.event_id || actionPayload.id ? Number(actionPayload.event_id || actionPayload.id) : null;
             if (!eId && (actionPayload.title || actionPayload.name || actionPayload.target_name)) {
               const query = (actionPayload.title || actionPayload.name || actionPayload.target_name).toLowerCase();
-              const eRow = db.prepare('SELECT id, title FROM calendar_events WHERE LOWER(title) LIKE ?').get(`%${query}%`) as any;
+              const eRow = db.prepare('SELECT id, title FROM calendar_events WHERE LOWER(title) LIKE ?').get(`%${query}%`) as Row;
               if (eRow) {
                 eId = eRow.id;
                 actionPayload.title = eRow.title;
               }
             }
             if (eId) {
-              const eRow = db.prepare('SELECT title FROM calendar_events WHERE id = ?').get(eId) as any;
+              const eRow = db.prepare('SELECT title FROM calendar_events WHERE id = ?').get(eId) as Row;
               const eTitle = eRow ? eRow.title : (actionPayload.title || 'ID ' + eId);
               db.prepare('DELETE FROM calendar_events WHERE id = ?').run(eId);
               executionSummary = `Agenda "${eTitle}" berhasil dihapus.`;
@@ -495,11 +497,11 @@ id: number;
           let uId = actionPayload.user_id ? Number(actionPayload.user_id) : null;
           if (!uId && (actionPayload.username || actionPayload.nama || actionPayload.name || actionPayload.target_name)) {
             const query = (actionPayload.username || actionPayload.nama || actionPayload.name || actionPayload.target_name).toLowerCase();
-            const uRow = db.prepare('SELECT id, nama, username FROM users WHERE LOWER(username) = ? OR LOWER(nama) LIKE ?').get(query, `%${query}%`) as any;
+            const uRow = db.prepare('SELECT id, nama, username FROM users WHERE LOWER(username) = ? OR LOWER(nama) LIKE ?').get(query, `%${query}%`) as Row;
             if (uRow) uId = uRow.id;
           }
           if (uId) {
-            const uRow = db.prepare('SELECT id, nama, username FROM users WHERE id = ?').get(uId) as any;
+            const uRow = db.prepare('SELECT id, nama, username FROM users WHERE id = ?').get(uId) as Row;
             const targetName = uRow ? `${uRow.nama} (@${uRow.username})` : (actionPayload.name || `ID ${uId}`);
             db.prepare('DELETE FROM users WHERE id = ?').run(uId);
             executionSummary = `Pengguna "${targetName}" berhasil dihapus dari sistem.`;
@@ -510,13 +512,13 @@ id: number;
           let pId = actionPayload.project_id ? Number(actionPayload.project_id) : null;
           if (!pId && (actionPayload.nama_proyek || actionPayload.name || actionPayload.target_name)) {
             const query = (actionPayload.nama_proyek || actionPayload.name || actionPayload.target_name).toLowerCase();
-            const pRow = db.prepare('SELECT id, nama_proyek FROM projects WHERE LOWER(nama_proyek) LIKE ?').get(`%${query}%`) as any;
+            const pRow = db.prepare('SELECT id, nama_proyek FROM projects WHERE LOWER(nama_proyek) LIKE ?').get(`%${query}%`) as Row;
             if (pRow) pId = pRow.id;
           }
           if (pId) {
             const newStatus = actionPayload.status || 'aktif';
             db.prepare('UPDATE projects SET status = ? WHERE id = ?').run(newStatus, pId);
-            const pRow = db.prepare('SELECT nama_proyek FROM projects WHERE id = ?').get(pId) as any;
+            const pRow = db.prepare('SELECT nama_proyek FROM projects WHERE id = ?').get(pId) as Row;
             resultId = pId;
             executionSummary = `Status proyek "${pRow ? pRow.nama_proyek : 'ID ' + pId}" berhasil diubah menjadi "${newStatus}".`;
           }
@@ -524,11 +526,11 @@ id: number;
           let tId = actionPayload.task_id ? Number(actionPayload.task_id) : null;
           if (!tId && (actionPayload.aktivitas || actionPayload.name || actionPayload.target_name)) {
             const query = (actionPayload.aktivitas || actionPayload.name || actionPayload.target_name).toLowerCase();
-            const tRow = db.prepare('SELECT id, aktivitas FROM realisasi WHERE LOWER(aktivitas) LIKE ?').get(`%${query}%`) as any;
+            const tRow = db.prepare('SELECT id, aktivitas FROM realisasi WHERE LOWER(aktivitas) LIKE ?').get(`%${query}%`) as Row;
             if (tRow) tId = tRow.id;
           }
           if (tId) {
-            const currentTask = db.prepare('SELECT * FROM realisasi WHERE id = ?').get(tId) as any;
+            const currentTask = db.prepare('SELECT * FROM realisasi WHERE id = ?').get(tId) as Row;
             if (currentTask) {
               const newAktivitas = actionPayload.aktivitas !== undefined ? actionPayload.aktivitas : currentTask.aktivitas;
               const newTarget = actionPayload.target !== undefined && actionPayload.target !== null ? Number(actionPayload.target) : Number(currentTask.target);
@@ -562,7 +564,7 @@ id: number;
         } else if (existingReq.action_type === 'delete_project_link') {
           let lId = actionPayload.link_id ? Number(actionPayload.link_id) : null;
           if (!lId && (actionPayload.title || actionPayload.target_title)) {
-            const link = db.prepare('SELECT id FROM project_links WHERE LOWER(title) LIKE ?').get(`%${(actionPayload.title || actionPayload.target_title).toLowerCase()}%`) as any;
+            const link = db.prepare('SELECT id FROM project_links WHERE LOWER(title) LIKE ?').get(`%${(actionPayload.title || actionPayload.target_title).toLowerCase()}%`) as Row;
             if (link) lId = link.id;
           }
           if (lId) {
@@ -588,7 +590,7 @@ id: number;
           let nId = actionPayload.note_id ? Number(actionPayload.note_id) : null;
           if (!nId && (actionPayload.message || actionPayload.search_keyword)) {
             const q = (actionPayload.message || actionPayload.search_keyword).toLowerCase();
-            const cnRow = db.prepare('SELECT id FROM project_client_notes WHERE LOWER(message) LIKE ?').get(`%${q}%`) as any;
+            const cnRow = db.prepare('SELECT id FROM project_client_notes WHERE LOWER(message) LIKE ?').get(`%${q}%`) as Row;
             if (cnRow) nId = cnRow.id;
           }
           if (nId) {
@@ -603,7 +605,7 @@ id: number;
           if (actionPayload.pinned !== undefined && actionPayload.pinned !== null) {
             pinVal = actionPayload.pinned ? 1 : 0;
           } else {
-            const cur = db.prepare('SELECT pinned FROM notes WHERE id = ?').get(nId) as any;
+            const cur = db.prepare('SELECT pinned FROM notes WHERE id = ?').get(nId) as Row;
             pinVal = cur?.pinned ? 0 : 1;
           }
           db.prepare('UPDATE notes SET pinned = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(pinVal, nId);
@@ -611,13 +613,13 @@ id: number;
           executionSummary = `Status pin catatan #${nId} berhasil diubah menjadi ${pinVal ? 'tersemat' : 'dilepas'}.`;
         } else if (existingReq.action_type === 'update_note_checklist') {
           const nId = Number(actionPayload.note_id);
-          const nRow = db.prepare('SELECT checklist FROM notes WHERE id = ?').get(nId) as any;
+          const nRow = db.prepare('SELECT checklist FROM notes WHERE id = ?').get(nId) as Row;
           if (nRow) {
-            let list: any[] = [];
+            let list: Row[] = [];
             try { list = JSON.parse(nRow.checklist || '[]'); } catch { list = []; }
             const itemText = String(actionPayload.item_text || '').trim();
             const done = Boolean(actionPayload.done);
-            const foundIdx = list.findIndex((item: any, idx: number) =>
+            const foundIdx = list.findIndex((item: Row, idx: number) =>
               String(idx + 1) === itemText || (item.text && item.text.toLowerCase().includes(itemText.toLowerCase()))
             );
             if (foundIdx >= 0) {
@@ -633,7 +635,7 @@ id: number;
           let eId = actionPayload.event_id ? Number(actionPayload.event_id) : null;
           if (!eId && (actionPayload.title || actionPayload.target_title)) {
             const q = (actionPayload.title || actionPayload.target_title).toLowerCase();
-            const eRow = db.prepare('SELECT id FROM calendar_events WHERE LOWER(title) LIKE ?').get(`%${q}%`) as any;
+            const eRow = db.prepare('SELECT id FROM calendar_events WHERE LOWER(title) LIKE ?').get(`%${q}%`) as Row;
             if (eRow) eId = eRow.id;
           }
           if (eId) {
@@ -661,7 +663,7 @@ id: number;
           let uId = actionPayload.user_id ? Number(actionPayload.user_id) : null;
           if (!uId && (actionPayload.username || actionPayload.target_name || actionPayload.nama)) {
             const q = (actionPayload.username || actionPayload.target_name || actionPayload.nama).toLowerCase();
-            const uRow = db.prepare('SELECT id FROM users WHERE LOWER(username) = ? OR LOWER(nama) LIKE ?').get(q, `%${q}%`) as any;
+            const uRow = db.prepare('SELECT id FROM users WHERE LOWER(username) = ? OR LOWER(nama) LIKE ?').get(q, `%${q}%`) as Row;
             if (uRow) uId = uRow.id;
           }
           if (uId) {
@@ -686,7 +688,7 @@ id: number;
           let tId = actionPayload.task_id ? Number(actionPayload.task_id) : null;
           if (!tId && (actionPayload.aktivitas || actionPayload.target_name)) {
             const q = (actionPayload.aktivitas || actionPayload.target_name).toLowerCase();
-            const tRow = db.prepare('SELECT id FROM realisasi WHERE LOWER(aktivitas) LIKE ?').get(`%${q}%`) as any;
+            const tRow = db.prepare('SELECT id FROM realisasi WHERE LOWER(aktivitas) LIKE ?').get(`%${q}%`) as Row;
             if (tRow) tId = tRow.id;
           }
           if (tId) {
@@ -703,7 +705,7 @@ id: number;
           let tId = actionPayload.task_id ? Number(actionPayload.task_id) : null;
           if (!tId && (actionPayload.aktivitas || actionPayload.target_name)) {
             const q = (actionPayload.aktivitas || actionPayload.target_name).toLowerCase();
-            const tRow = db.prepare('SELECT id FROM realisasi WHERE LOWER(aktivitas) LIKE ?').get(`%${q}%`) as any;
+            const tRow = db.prepare('SELECT id FROM realisasi WHERE LOWER(aktivitas) LIKE ?').get(`%${q}%`) as Row;
             if (tRow) tId = tRow.id;
           }
           if (tId) {
@@ -737,14 +739,14 @@ id: number;
           const uId = Number(actionPayload.user_id);
           const role = actionPayload.role === 'admin' ? 'admin' : 'member';
           db.prepare('INSERT OR IGNORE INTO chat_group_members (group_id, user_id, role) VALUES (?, ?, ?)').run(gId, uId, role);
-          const uRow = db.prepare('SELECT nama FROM users WHERE id = ?').get(uId) as any;
+          const uRow = db.prepare('SELECT nama FROM users WHERE id = ?').get(uId) as Row;
           db.prepare("INSERT INTO chat_messages (group_id, user_id, sender_name, message, is_ai) VALUES (?, NULL, 'Miu', ?, 1)").run(gId, `👋 ${uRow?.nama || 'Anggota baru'} telah ditambahkan ke grup.`);
           executionSummary = `Anggota ${uRow?.nama || uId} berhasil dimasukkan ke grup #${gId}.`;
         } else if (existingReq.action_type === 'remove_group_member') {
           const gId = Number(actionPayload.group_id);
           const uId = Number(actionPayload.user_id);
           db.prepare('DELETE FROM chat_group_members WHERE group_id = ? AND user_id = ?').run(gId, uId);
-          const uRow = db.prepare('SELECT nama FROM users WHERE id = ?').get(uId) as any;
+          const uRow = db.prepare('SELECT nama FROM users WHERE id = ?').get(uId) as Row;
           db.prepare("INSERT INTO chat_messages (group_id, user_id, sender_name, message, is_ai) VALUES (?, NULL, 'Miu', ?, 1)").run(gId, `📢 ${uRow?.nama || 'Anggota'} telah dikeluarkan dari grup.`);
           executionSummary = `Anggota ${uRow?.nama || uId} berhasil dikeluarkan dari grup #${gId}.`;
         } else if (existingReq.action_type === 'plan_tasks') {
@@ -752,7 +754,7 @@ id: number;
           const tasks = Array.isArray(actionPayload.tasks) ? actionPayload.tasks : [];
           for (const t of tasks) {
             const assignedUid = t.user_id ? Number(t.user_id) : executingUserId;
-            const uRow = db.prepare('SELECT nama, divisi FROM users WHERE id = ?').get(assignedUid) as any;
+            const uRow = db.prepare('SELECT nama, divisi FROM users WHERE id = ?').get(assignedUid) as Row;
             const taskNama = uRow ? uRow.nama : namaUser;
             const taskDivisi = uRow ? uRow.divisi : divisiUser;
 

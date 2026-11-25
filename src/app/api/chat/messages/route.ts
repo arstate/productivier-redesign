@@ -1,3 +1,4 @@
+import type { Row } from '@/types/db-rows';
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { requireAuth } from '@/lib/auth';
@@ -45,7 +46,7 @@ export async function GET(req: Request) {
         ORDER BY m.id DESC
         LIMIT 100
       ) ORDER BY id ASC
-    `).all(Number(groupId)) as any[];
+    `).all(Number(groupId)) as Row[];
 
     const formattedMessages = messages.map((m) => ({
       id: m.id,
@@ -289,9 +290,9 @@ Pengguna penanya (${sender_name}) adalah PRIA / LAKI-LAKI.
         LEFT JOIN users u ON p.pic_id = u.id
         WHERE cgp.group_id = ?
         ORDER BY p.id ASC
-      `).all(Number(group_id)) as any[];
+      `).all(Number(group_id)) as Row[];
 
-      const connectedProjects = rawConnectedProjects.map((p) => {
+      const connectedProjects = rawConnectedProjects.map((p): Row => {
         const target = Number(p.target_total) || 0;
         const total = Number(p.total_realisasi) || 0;
         return {
@@ -301,7 +302,7 @@ Pengguna penanya (${sender_name}) adalah PRIA / LAKI-LAKI.
       });
 
       // Fallback to legacy group.project_id if connectedProjects is empty
-      if (connectedProjects.length === 0 && (group as any).project_id) {
+      if (connectedProjects.length === 0 && (group as Row).project_id) {
         const legacyP = db.prepare(`
           SELECT 
             p.id, p.nama_proyek, p.divisi, p.target_total, 
@@ -311,7 +312,7 @@ Pengguna penanya (${sender_name}) adalah PRIA / LAKI-LAKI.
           FROM projects p 
           LEFT JOIN users u ON p.pic_id = u.id
           WHERE p.id = ?
-        `).get(Number((group as any).project_id)) as any;
+        `).get(Number((group as Row).project_id)) as Row;
         if (legacyP) {
           const target = Number(legacyP.target_total) || 0;
           const total = Number(legacyP.total_realisasi) || 0;
@@ -330,14 +331,14 @@ Pengguna penanya (${sender_name}) adalah PRIA / LAKI-LAKI.
             FROM realisasi 
             WHERE project_id = ? AND kendala IS NOT NULL AND TRIM(kendala) != ''
             ORDER BY id DESC LIMIT 3
-          `).all(p.id) as any[];
+          `).all(p.id) as Row[];
 
           const recentTasks = db.prepare(`
             SELECT nama, aktivitas, persentase, tanggal
             FROM realisasi
             WHERE project_id = ?
             ORDER BY id DESC LIMIT 2
-          `).all(p.id) as any[];
+          `).all(p.id) as Row[];
 
           const blockerInfo = blockers.length > 0
             ? blockers.map(b => `${b.nama}: "${b.kendala}"${b.solusi ? ` (Solusi: ${b.solusi})` : ''}`).join('; ')
@@ -360,14 +361,14 @@ Pengguna penanya (${sender_name}) adalah PRIA / LAKI-LAKI.
       }
 
       // Check if user specifically tagged a project via /project or /pro
-      let matchedTaggedProject: any = null;
+      let matchedTaggedProject: Row | null = null;
       let taggedProjectFocusPrompt = '';
       if (taggedProjectName) {
         // Look in connected projects first
         matchedTaggedProject = connectedProjects.find(
           (p) => p.nama_proyek.toLowerCase() === taggedProjectName.toLowerCase() ||
                  p.nama_proyek.toLowerCase().includes(taggedProjectName.toLowerCase())
-        );
+        ) ?? null;
         // Fallback to all projects in db
         if (!matchedTaggedProject) {
           const fallbackP = db.prepare(`
@@ -376,7 +377,7 @@ Pengguna penanya (${sender_name}) adalah PRIA / LAKI-LAKI.
             FROM projects p
             LEFT JOIN users u ON p.pic_id = u.id
             WHERE LOWER(p.nama_proyek) LIKE ? LIMIT 1
-          `).get(`%${taggedProjectName.toLowerCase()}%`) as any;
+          `).get(`%${taggedProjectName.toLowerCase()}%`) as Row;
           if (fallbackP) {
             const target = Number(fallbackP.target_total) || 0;
             const total = Number(fallbackP.total_realisasi) || 0;
@@ -393,14 +394,14 @@ Pengguna penanya (${sender_name}) adalah PRIA / LAKI-LAKI.
             FROM realisasi 
             WHERE project_id = ? AND kendala IS NOT NULL AND TRIM(kendala) != ''
             ORDER BY id DESC LIMIT 5
-          `).all(matchedTaggedProject.id) as any[];
+          `).all(matchedTaggedProject.id) as Row[];
 
           const recentRealisasi = db.prepare(`
             SELECT nama, aktivitas, realisasi, persentase, tanggal 
             FROM realisasi 
             WHERE project_id = ?
             ORDER BY id DESC LIMIT 5
-          `).all(matchedTaggedProject.id) as any[];
+          `).all(matchedTaggedProject.id) as Row[];
 
           taggedProjectFocusPrompt = `\n\n🎯 [FOKUS KHUSUS: PENGGUNA NGETAG PROYEK VIA /project "${matchedTaggedProject.nama_proyek}"]
 Pengguna secara eksplisit ngetag proyek "${matchedTaggedProject.nama_proyek}".
@@ -457,12 +458,12 @@ ${compactedSummary ? `\n${compactedSummary}` : ''}`,
 
       // Autonomous action handler in group chat (Nudge, Add Member, etc.)
       const isNudgeIntent = /(?:colek|ingatkan|remind|nudge)\s+(@?\w+)/i.test(cleanMessage);
-      let actionTargetUser: any = null;
+      let actionTargetUser: Row | null = null;
       if (isNudgeIntent) {
         const nudgeMatch = cleanMessage.match(/(?:colek|ingatkan|remind|nudge)\s+@?(\w+)/i);
         const targetRaw = nudgeMatch ? nudgeMatch[1].toLowerCase() : '';
         if (targetRaw) {
-          actionTargetUser = db.prepare('SELECT id, nama, username FROM users WHERE LOWER(nama) LIKE ? OR LOWER(username) LIKE ?').get(`%${targetRaw}%`, `%${targetRaw}%`);
+          actionTargetUser = db.prepare('SELECT id, nama, username FROM users WHERE LOWER(nama) LIKE ? OR LOWER(username) LIKE ?').get(`%${targetRaw}%`, `%${targetRaw}%`) as Row | undefined ?? null;
           if (actionTargetUser) {
             try {
               db.prepare(`
@@ -483,12 +484,12 @@ ${compactedSummary ? `\n${compactedSummary}` : ''}`,
       }
 
       const isAddMemberIntent = /(?:tambah(?:kan)?|masuk(?:kan)?|add)\s+(?:anggota\s+)?@?(\w+)/i.test(cleanMessage);
-      let addedMemberUser: any = null;
+      let addedMemberUser: Row | null = null;
       if (isAddMemberIntent) {
         const addMatch = cleanMessage.match(/(?:tambah(?:kan)?|masuk(?:kan)?|add)\s+(?:anggota\s+)?@?(\w+)/i);
         const targetRaw = addMatch ? addMatch[1].toLowerCase() : '';
         if (targetRaw) {
-          addedMemberUser = db.prepare('SELECT id, nama, username FROM users WHERE LOWER(nama) LIKE ? OR LOWER(username) LIKE ?').get(`%${targetRaw}%`, `%${targetRaw}%`);
+          addedMemberUser = db.prepare('SELECT id, nama, username FROM users WHERE LOWER(nama) LIKE ? OR LOWER(username) LIKE ?').get(`%${targetRaw}%`, `%${targetRaw}%`) as Row | undefined ?? null;
           if (addedMemberUser) {
             const exists = db.prepare('SELECT id FROM chat_group_members WHERE group_id = ? AND user_id = ?').get(Number(group_id), addedMemberUser.id);
             if (!exists) {
@@ -512,7 +513,7 @@ ${compactedSummary ? `\n${compactedSummary}` : ''}`,
         const isErnie = groupAiModel.includes('ernie');
         const isNemotron = groupAiModel.includes('nemotron');
 
-        const payload: any = {
+        const payload: Row = {
           model: groupAiModel,
           messages: promptMessages,
           temperature,
@@ -620,7 +621,7 @@ ${compactedSummary ? `\n${compactedSummary}` : ''}`,
           }
           if (!aiReasoning && Array.isArray(choice?.message?.reasoning_details)) {
             const textParts = choice.message.reasoning_details
-              .map((d: any) => (typeof d === 'string' ? d : d.text || d.content || ''))
+              .map((d: Row) => (typeof d === 'string' ? d : d.text || d.content || ''))
               .filter(Boolean);
             if (textParts.length > 0) {
               aiReasoning = textParts.join('\n').trim();
@@ -667,7 +668,7 @@ ${compactedSummary ? `\n${compactedSummary}` : ''}`,
             : `Siap Bro ${sender_name}! Rekan kita **${addedMemberUser.nama}** udah berhasil langsung gw masukkan ke grup chat "${groupName}" ini. Welcome aboard, Men! 🚀`;
         } else if (matchedTaggedProject) {
           const mp = matchedTaggedProject;
-          const mpBlockers = db.prepare(`SELECT nama, kendala, solusi FROM realisasi WHERE project_id = ? AND kendala IS NOT NULL AND TRIM(kendala) != ''`).all(mp.id) as any[];
+          const mpBlockers = db.prepare(`SELECT nama, kendala, solusi FROM realisasi WHERE project_id = ? AND kendala IS NOT NULL AND TRIM(kendala) != ''`).all(mp.id) as Row[];
           const blockerSection = mpBlockers.length > 0
             ? mpBlockers.map(b => `⚠️ **Kendala (${b.nama})**: ${b.kendala}${b.solusi ? `\n   *Solusi*: ${b.solusi}` : ''}`).join('\n')
             : '✅ Tidak ada kendala aktif yang menghambat.';

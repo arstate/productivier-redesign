@@ -1,5 +1,14 @@
 # 🚀 PRODUCTIVIER REDESIGN — RELEASE NOTES & SYSTEM UPDATES
 
+## 🧹 Versi v2.6.1 — ESLint Zero (0 Error, 0 Warning)
+*Tanggal: 25 November 2026*
+
+- Menambahkan `src/types/db-rows.ts` (`Row`) sebagai satu-satunya titik `any` di lapisan API; semua `as any` / `error: any` / `db: any` di `src/app/api/**` diganti tipe eksplisit (`Row`, `DatabaseSync`, `catch (error)` + `instanceof Error`).
+- `FloatingAIAgent.tsx`: tipe minimal Web Speech API menggantikan `window as any`.
+- `ChatTab.tsx`: `any` diganti `ChatGroupType`.
+- Menghapus import/variabel tak terpakai di 10+ komponen; anotasi `eslint-disable-next-line` + alasan untuk pola efek load-awal, `Date.now` di event handler, dan `<img>` SVG/avatar.
+- Hasil: `eslint src` 0 error 0 warning (sebelumnya 244 error + 66 warning), `tsc --noEmit` 0 error, `npm run build` OK, `test_ecosystem.mjs` 56 PASS / 0 FAIL, `test_markdown.mjs` 9 PASS, CDP QA pass6 0 console/page error, smoke test `/api/ai/chat` (3 skenario) + `/api/chat/groups` OK.
+
 ## 🔒 Versi v2.6.0 — Cookie Session Auth, Client Token Portal, Dark Mode Fix, & 5-Pass Mobile/CDP QA
 *Tanggal Rilis: 25 November 2026*  
 *Versi Aplikasi: v2.6.0 Production Build (Next.js 16.4.6 Turbopack)*

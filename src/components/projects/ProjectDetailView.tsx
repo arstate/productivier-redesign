@@ -4,7 +4,6 @@ import React, { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   ArrowLeft,
-  FolderKanban,
   Share2,
   ExternalLink,
   Plus,
@@ -14,32 +13,24 @@ import {
   CheckSquare,
   Square,
   FileText,
-  Layers,
   Sparkles,
   Link2,
   StickyNote,
-  MessageSquareQuote,
   Clock,
   CheckCircle2,
-  HelpCircle,
   Send,
   RefreshCw,
   User,
-  Tag,
   Pin,
-  ChevronRight,
-  AlertCircle,
   ShieldCheck,
   Calendar,
-  Globe,
   X,
   MessageSquare,
   Users,
   UserPlus,
-  UserCheck,
   MoreHorizontal,
 } from "lucide-react";
-import CustomSelect, { CustomSelectOption } from "@/components/ui/CustomSelect";
+import CustomSelect from "@/components/ui/CustomSelect";
 import ConfirmModal from "@/components/ui/ConfirmModal";
 import {
   ProjectType,
@@ -78,7 +69,6 @@ export default function ProjectDetailView({
   users = [],
   onBack,
   onRefreshProjects,
-  onGoInput,
   onGoNotes,
   onGoChat,
   onGoCalendar,
@@ -89,7 +79,7 @@ export default function ProjectDetailView({
 
   // Project Members State
   const [members, setMembers] = useState<ProjectMemberType[]>(project.members || []);
-  const [loadingMembers, setLoadingMembers] = useState(false);
+  const [, setLoadingMembers] = useState(false);
   const [showAddMemberModal, setShowAddMemberModal] = useState(false);
   const [selectedNewUserId, setSelectedNewUserId] = useState<string>("");
   const [addingMember, setAddingMember] = useState(false);
@@ -108,18 +98,18 @@ export default function ProjectDetailView({
   const [eventTitle, setEventTitle] = useState("");
   const [eventDate, setEventDate] = useState(new Date().toISOString().slice(0, 10));
   const [eventStartTime, setEventStartTime] = useState("09:00");
-  const [eventEndTime, setEventEndTime] = useState("10:00");
+  const [eventEndTime] = useState("10:00");
   const [eventCategory, setEventCategory] = useState<CalendarEventType["category"]>("milestone");
   const [eventDescription, setEventDescription] = useState("");
   const [savingEvent, setSavingEvent] = useState(false);
 
   // Links State
   const [links, setLinks] = useState<ProjectLinkType[]>(project.links || []);
-  const [loadingLinks, setLoadingLinks] = useState(false);
+  const [, setLoadingLinks] = useState(false);
   const [showAddLinkForm, setShowAddLinkForm] = useState(false);
   const [linkTitle, setLinkTitle] = useState("");
   const [linkUrl, setLinkUrl] = useState("");
-  const [linkPlatform, setLinkPlatform] = useState<ProjectLinkType["platform"]>("drive");
+  const [linkPlatform] = useState<ProjectLinkType["platform"]>("drive");
   const [savingLink, setSavingLink] = useState(false);
 
   // Client Notes & Feedback Stream State
@@ -132,7 +122,7 @@ export default function ProjectDetailView({
 
   // Internal Notes State (connected to notes table)
   const [internalNotes, setInternalNotes] = useState<NoteType[]>([]);
-  const [loadingNotes, setLoadingNotes] = useState(false);
+  const [, setLoadingNotes] = useState(false);
   const [showAddNoteForm, setShowAddNoteForm] = useState(false);
   const [noteTitle, setNoteTitle] = useState("");
   const [noteContent, setNoteContent] = useState("");
@@ -149,6 +139,8 @@ export default function ProjectDetailView({
   // Reactive Project State
   const [currentProject, setCurrentProject] = useState<ProjectType>(project);
   useEffect(() => {
+    // Sinkronisasi state lokal dengan prop project yang diperbarui parent.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setCurrentProject(project);
     if (project.members) {
       setMembers(project.members);
@@ -478,12 +470,16 @@ export default function ProjectDetailView({
   };
 
   useEffect(() => {
+    // Load data awal saat mount; setState terjadi setelah fetch async.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchLinks();
     fetchClientNotes();
     fetchInternalNotes();
     fetchProjectRealisasi();
     fetchMembers();
     fetchCalendarEvents();
+  // Efek mount/trigger tunggal: fungsi loader sengaja tidak jadi dependency agar tidak refetch tiap render.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project.id]);
 
   // Handle Add Link
@@ -760,7 +756,6 @@ export default function ProjectDetailView({
     return clientNotes.filter((n) => n.status === "open").length;
   }, [clientNotes]);
 
-  const isComplete = project.persentase >= 100;
 
   return (
     <div className="space-y-6">

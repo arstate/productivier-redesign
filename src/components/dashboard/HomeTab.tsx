@@ -5,7 +5,6 @@ import {
   Calendar,
   ArrowUpRight,
   Check,
-  ChevronRight,
   MessageCircle,
   MessageSquare,
   CheckCircle2,
@@ -54,12 +53,10 @@ function timeToHourFloat(timeStr?: string, fallbackHour = 9): number {
 export default function HomeTab({
   user,
   viewMode,
-  activeProjectsCount,
   selectedProjectId = "all",
   projects,
   realisasi,
   monitoring,
-  onGoProjects,
   onGoCalendar,
   onGoNotes,
   onGoChat,
@@ -70,7 +67,7 @@ export default function HomeTab({
 }: HomeTabProps) {
   // Database-backed to-do state for personal mode
   const [personalTasks, setPersonalTasks] = useState<PersonalTodoType[]>([]);
-  const [loadingTodos, setLoadingTodos] = useState(false);
+  const [loadingTodos] = useState(false);
   const [newTodoTitle, setNewTodoTitle] = useState("");
   const [newTodoTag, setNewTodoTag] = useState("Desain");
   const [addingTodo, setAddingTodo] = useState(false);
@@ -90,21 +87,6 @@ export default function HomeTab({
       }
     } catch {
       // ignore network error
-    }
-  };
-
-  const fetchTodos = async () => {
-    setLoadingTodos(true);
-    try {
-      const res = await fetch(`/api/todos?user_id=${user.id}`);
-      if (res.ok) {
-        const data = await res.json();
-        setPersonalTasks(data);
-      }
-    } catch (err) {
-      console.error("Gagal memuat to-do:", err);
-    } finally {
-      setLoadingTodos(false);
     }
   };
 
@@ -131,6 +113,8 @@ export default function HomeTab({
       active = false;
       window.removeEventListener("productivier:refresh_data", handleRefresh);
     };
+  // Efek mount/trigger tunggal: fungsi loader sengaja tidak jadi dependency agar tidak refetch tiap render.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user.id, todayStr]);
 
   const handleConvertTodoToCalendar = async (e: React.MouseEvent, t: PersonalTodoType) => {

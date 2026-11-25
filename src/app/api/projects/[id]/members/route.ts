@@ -1,3 +1,4 @@
+import type { Row } from '@/types/db-rows';
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { requireAuth } from '@/lib/auth';
@@ -24,7 +25,7 @@ export async function GET(request: Request, context: RouteContext) {
       JOIN projects p ON pm.project_id = p.id
       WHERE pm.project_id = ?
       ORDER BY CASE WHEN pm.role = 'leader' THEN 0 ELSE 1 END, pm.id ASC
-    `).all(projectId) as any[];
+    `).all(projectId) as Row[];
 
     const members = rawMembers.map((m) => ({
       ...m,
@@ -32,8 +33,8 @@ export async function GET(request: Request, context: RouteContext) {
     }));
 
     return NextResponse.json({ members });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message || 'Gagal memuat anggota proyek' }, { status: 500 });
+  } catch (error) {
+    return NextResponse.json({ error: (error instanceof Error ? error.message : '') || 'Gagal memuat anggota proyek' }, { status: 500 });
   }
 }
 
@@ -112,7 +113,7 @@ export async function POST(request: Request, context: RouteContext) {
       JOIN projects p ON pm.project_id = p.id
       WHERE pm.project_id = ?
       ORDER BY CASE WHEN pm.role = 'leader' THEN 0 ELSE 1 END, pm.id ASC
-    `).all(projectId) as any[];
+    `).all(projectId) as Row[];
 
     const updatedMembers = updatedRawMembers.map((m) => ({
       ...m,
@@ -120,8 +121,8 @@ export async function POST(request: Request, context: RouteContext) {
     }));
 
     return NextResponse.json({ success: true, members: updatedMembers }, { status: 201 });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message || 'Gagal menambahkan anggota' }, { status: 500 });
+  } catch (error) {
+    return NextResponse.json({ error: (error instanceof Error ? error.message : '') || 'Gagal menambahkan anggota' }, { status: 500 });
   }
 }
 
@@ -177,7 +178,7 @@ export async function DELETE(request: Request, context: RouteContext) {
     } catch {}
 
     return NextResponse.json({ success: true, message: 'Anggota berhasil dikeluarkan dari proyek' });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message || 'Gagal menghapus anggota' }, { status: 500 });
+  } catch (error) {
+    return NextResponse.json({ error: (error instanceof Error ? error.message : '') || 'Gagal menghapus anggota' }, { status: 500 });
   }
 }

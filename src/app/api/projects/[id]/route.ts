@@ -27,8 +27,8 @@ export async function GET(request: Request, context: RouteContext) {
     }
 
     return NextResponse.json(project);
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message || 'Gagal memuat proyek' }, { status: 500 });
+  } catch (error) {
+    return NextResponse.json({ error: (error instanceof Error ? error.message : '') || 'Gagal memuat proyek' }, { status: 500 });
   }
 }
 
@@ -51,7 +51,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     }
 
     const updates: string[] = [];
-    const values: any[] = [];
+    const values: (string | number | null)[] = [];
 
     if (body.nama_proyek !== undefined) {
       updates.push('nama_proyek = ?');
@@ -114,9 +114,9 @@ export async function PATCH(request: Request, context: RouteContext) {
 
     const updated = db.prepare('SELECT * FROM projects WHERE id = ?').get(Number(id));
     return NextResponse.json({ success: true, project: updated });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error PATCH /api/projects/[id]:', error);
-    return NextResponse.json({ error: error.message || 'Gagal memperbarui proyek' }, { status: 500 });
+    return NextResponse.json({ error: (error instanceof Error ? error.message : '') || 'Gagal memperbarui proyek' }, { status: 500 });
   }
 }
 
@@ -143,8 +143,8 @@ export async function DELETE(request: Request, context: RouteContext) {
     db.prepare('DELETE FROM project_client_notes WHERE project_id = ?').run(projectId);
     db.prepare('DELETE FROM projects WHERE id = ?').run(projectId);
     return NextResponse.json({ success: true, message: 'Proyek berhasil dihapus' });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error DELETE /api/projects/[id]:', error);
-    return NextResponse.json({ error: error.message || 'Gagal menghapus proyek' }, { status: 500 });
+    return NextResponse.json({ error: (error instanceof Error ? error.message : '') || 'Gagal menghapus proyek' }, { status: 500 });
   }
 }

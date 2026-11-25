@@ -1,3 +1,4 @@
+import type { Row } from '@/types/db-rows';
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { requireAuth } from '@/lib/auth';
@@ -10,17 +11,17 @@ export async function GET(request: Request) {
     const db = getDb();
     const todos = db
       .prepare('SELECT * FROM personal_todos WHERE user_id = ? ORDER BY created_at DESC')
-      .all(auth.user.id);
+      .all(auth.user.id) as Row[];
 
-    const formatted = todos.map((t: any) => ({
+    const formatted = todos.map((t: Row) => ({
       ...t,
       done: Boolean(t.done),
     }));
 
     return NextResponse.json(formatted);
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error GET /api/todos:', error);
-    return NextResponse.json({ error: error.message || 'Gagal memuat to-do' }, { status: 500 });
+    return NextResponse.json({ error: (error instanceof Error ? error.message : '') || 'Gagal memuat to-do' }, { status: 500 });
   }
 }
 
@@ -47,7 +48,7 @@ export async function POST(request: Request) {
       VALUES (?, ?, ?, ?, ?, 0, datetime('now', 'localtime'))
     `).run(id, finalUserId, title.trim(), finalTag, finalTime);
 
-    const newTodo = db.prepare('SELECT * FROM personal_todos WHERE id = ?').get(id) as any;
+    const newTodo = db.prepare('SELECT * FROM personal_todos WHERE id = ?').get(id) as Row;
 
     return NextResponse.json({
       success: true,
@@ -56,8 +57,8 @@ export async function POST(request: Request) {
         done: Boolean(newTodo.done),
       },
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error POST /api/todos:', error);
-    return NextResponse.json({ error: error.message || 'Gagal membuat to-do' }, { status: 500 });
+    return NextResponse.json({ error: (error instanceof Error ? error.message : '') || 'Gagal membuat to-do' }, { status: 500 });
   }
 }

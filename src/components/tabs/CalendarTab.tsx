@@ -3,26 +3,19 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
-  Calendar as CalendarIcon,
+  Calendar as 
   ChevronLeft,
   ChevronRight,
   Plus,
   Clock,
   Trash2,
   X,
-  CheckCircle2,
-  AlertCircle,
-  Briefcase,
-  Users,
-  Flag,
-  Sparkles,
   Edit3,
 } from "lucide-react";
 import { UserType, ProjectType, RealisasiType, CalendarEventType } from "@/types";
 import CustomSelect, { CustomSelectOption } from "@/components/ui/CustomSelect";
 import ConfirmModal from "@/components/ui/ConfirmModal";
 
-const SPRING = { type: "spring" as const, stiffness: 420, damping: 32 };
 
 const DAYS_NAMES = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"];
 const MONTH_NAMES = [
@@ -139,6 +132,8 @@ export default function CalendarTab({
       active = false;
       window.removeEventListener("productivier:refresh_data", handleRefresh);
     };
+  // Efek mount/trigger tunggal: fungsi loader sengaja tidak jadi dependency agar tidak refetch tiap render.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [year, month, selectedProjectId]);
 
   const handlePrevMonth = () => {

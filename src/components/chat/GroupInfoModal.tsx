@@ -3,7 +3,6 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
-  X,
   ArrowLeft,
   Users,
   Shield,
@@ -17,11 +16,9 @@ import {
   Check,
   Calendar,
   ExternalLink,
-  ChevronRight,
   FileText,
   AlertTriangle,
   Sparkles,
-  Cpu,
   Plus,
   Loader2,
 } from "lucide-react";
@@ -217,6 +214,8 @@ export default function GroupInfoModal({
       loadConnectedProjects();
     }, 0);
     return () => clearTimeout(t);
+  // Efek mount/trigger tunggal: fungsi loader sengaja tidak jadi dependency agar tidak refetch tiap render.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, group.id, group.name, group.description, group.ai_name, group.ai_model, group.ai_thinking_mode]);
 
   if (!isOpen) return null;

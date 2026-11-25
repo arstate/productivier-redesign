@@ -3,12 +3,7 @@
 import React, { useState } from "react";
 import { Share2, Check } from "lucide-react";
 
-interface CopyPortalButtonProps {
-  projectName?: string;
-  projectId: number;
-}
-
-export default function CopyPortalButton({ projectId }: CopyPortalButtonProps) {
+export default function CopyPortalButton() {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = async () => {

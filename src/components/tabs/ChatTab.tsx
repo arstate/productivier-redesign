@@ -11,9 +11,7 @@ import {
   Search,
   X,
   Shield,
-  Clock,
   FolderKanban,
-  CheckCircle2,
   Reply,
   Brain,
   ChevronDown,
@@ -28,7 +26,6 @@ import MarkdownText from "@/components/ui/MarkdownText";
 import { stripThinkTags } from "@/lib/markdown";
 import AIMascot from "@/components/ui/AIMascot";
 
-const SPRING = { type: "spring" as const, stiffness: 420, damping: 32 };
 
 interface ChatTabProps {
   user: UserType;
@@ -128,7 +125,7 @@ export default function ChatTab({ user, projects, showToast }: ChatTabProps) {
         let chosenGroupId = loadedGroups[0].id;
         if (storedGroupId) {
           const gIdNum = Number(storedGroupId);
-          const matchingByGroup = loadedGroups.find((g: any) => g.id === gIdNum);
+          const matchingByGroup = loadedGroups.find((g: ChatGroupType) => g.id === gIdNum);
           if (matchingByGroup) {
             chosenGroupId = matchingByGroup.id;
             setMobilePane("chat");
@@ -136,16 +133,16 @@ export default function ChatTab({ user, projects, showToast }: ChatTabProps) {
         } else if (storedProjId) {
           const pIdNum = Number(storedProjId);
           const matchingGroup = loadedGroups.find(
-            (g: any) =>
+            (g: ChatGroupType) =>
               g.project_id === pIdNum ||
-              g.connected_projects?.some((cp: any) => cp.id === pIdNum)
+              g.connected_projects?.some((cp) => cp.id === pIdNum)
           );
           if (matchingGroup) {
             chosenGroupId = matchingGroup.id;
             setMobilePane("chat");
           }
         }
-        if (storedGroupId || storedProjId || !activeGroupId || !loadedGroups.some((g: any) => g.id === activeGroupId)) {
+        if (storedGroupId || storedProjId || !activeGroupId || !loadedGroups.some((g: ChatGroupType) => g.id === activeGroupId)) {
           setActiveGroupId(chosenGroupId);
         }
       } else {
@@ -204,6 +201,8 @@ export default function ChatTab({ user, projects, showToast }: ChatTabProps) {
   };
 
   useEffect(() => {
+    // Load awal saat mount; setState terjadi setelah fetch async.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadGroups();
     const handleRefresh = () => {
       loadGroups();
@@ -212,10 +211,14 @@ export default function ChatTab({ user, projects, showToast }: ChatTabProps) {
     return () => {
       window.removeEventListener("productivier:refresh_data", handleRefresh);
     };
+  // Efek mount/trigger tunggal: fungsi loader sengaja tidak jadi dependency agar tidak refetch tiap render.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     if (activeGroupId) {
+      // Reset reply saat ganti grup (derived dari activeGroupId).
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setReplyingToMessage(null);
       loadMessages(activeGroupId);
 
@@ -225,6 +228,8 @@ export default function ChatTab({ user, projects, showToast }: ChatTabProps) {
       }, 4000);
       return () => clearInterval(interval);
     }
+  // Efek mount/trigger tunggal: fungsi loader sengaja tidak jadi dependency agar tidak refetch tiap render.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeGroupId]);
 
   const activeGroup = groups.find((g) => g.id === activeGroupId) || null;
@@ -243,6 +248,8 @@ export default function ChatTab({ user, projects, showToast }: ChatTabProps) {
       const targetGroupId = sessionStorage.getItem("productivier_chat_group_id");
       const targetProjId = sessionStorage.getItem("productivier_chat_project_id");
       if (draft) {
+        // Baca draft dari sessionStorage (sistem eksternal) sekali saat mount.
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setInputText(draft);
         sessionStorage.removeItem("productivier_chat_draft");
       }
@@ -292,6 +299,8 @@ export default function ChatTab({ user, projects, showToast }: ChatTabProps) {
         }
       }
     }
+  // Efek mount/trigger tunggal: fungsi loader sengaja tidak jadi dependency agar tidak refetch tiap render.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [groups]);
 
   useEffect(() => {

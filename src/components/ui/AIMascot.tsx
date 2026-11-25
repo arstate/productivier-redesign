@@ -26,6 +26,8 @@ export const AIMascot: React.FC<AIMascotProps> = ({
         aspectRatio: "1 / 1",
       }}
     >
+      {/* SVG statis: next/image tidak memberi manfaat optimasi di sini. */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src="/mascot-ai.svg"
         alt={alt}

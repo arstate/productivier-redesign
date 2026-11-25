@@ -243,7 +243,7 @@ export default async function ClientProjectPage({ params, searchParams }: Client
               </code>
             </div>
 
-            <CopyPortalButton projectId={projectId} projectName={project.nama_proyek} />
+            <CopyPortalButton />
 
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-800 font-bold text-xs border border-emerald-200/60 shadow-2xs">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
@@ -304,6 +304,8 @@ export default async function ClientProjectPage({ params, searchParams }: Client
               <div className="flex items-center gap-3">
                 <div className="relative">
                   {project.pic_avatar ? (
+                    // Avatar/maskot dari URL dinamis atau SVG statis: next/image tidak memberi manfaat optimasi di sini.
+                    // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={project.pic_avatar}
                       alt={project.pic_nama || "PIC"}

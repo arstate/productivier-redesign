@@ -1,3 +1,5 @@
+import type { Row } from '@/types/db-rows';
+import type { DatabaseSync } from 'node:sqlite';
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { requireAuth } from '@/lib/auth';
@@ -628,11 +630,11 @@ const TOOLS = [
 ];
 
 function registerPendingAction(
-  db: any,
+  db: DatabaseSync,
   userId: number,
   actionType: string,
   description: string,
-  payload: any,
+  payload: Row,
   notifTitle: string,
   notifMsg: string
 ) {
@@ -712,28 +714,28 @@ function extractEntityId(text: string, entityKeywords: string[]): number | null 
   return null;
 }
 
-function findChatGroup(db: any, query: { id?: any; name?: string; text?: string }) {
+function findChatGroup(db: DatabaseSync, query: { id?: string | number | null; name?: string; text?: string }) {
   let targetId = query.id ? Number(query.id) : null;
   if (!targetId && query.text) {
     targetId = extractEntityId(query.text, ['grup', 'group', 'room', 'obrolan', 'chat']);
   }
   if (targetId) {
-    const row = db.prepare('SELECT id, name FROM chat_groups WHERE id = ?').get(targetId) as any;
+    const row = db.prepare('SELECT id, name FROM chat_groups WHERE id = ?').get(targetId) as Row;
     if (row) return row;
   }
-  const all = db.prepare('SELECT id, name FROM chat_groups').all() as any[];
+  const all = db.prepare('SELECT id, name FROM chat_groups').all() as Row[];
   if (!all.length) return null;
 
   const rawSearch = (query.name || '').toLowerCase().trim();
   if (rawSearch) {
-    const direct = all.find((g: any) => g.name.toLowerCase() === rawSearch || g.name.toLowerCase().includes(rawSearch) || rawSearch.includes(g.name.toLowerCase()));
+    const direct = all.find((g: Row) => g.name.toLowerCase() === rawSearch || g.name.toLowerCase().includes(rawSearch) || rawSearch.includes(g.name.toLowerCase()));
     if (direct) return direct;
   }
 
   const cleaned = cleanSearchQuery(query.text || query.name || '', ['grup', 'group', 'obrolan', 'room']);
   if (!cleaned) return null;
 
-  let bestMatch: any = null;
+  let bestMatch: Row | null = null;
   let bestScore = 0;
   for (const g of all) {
     const score = matchEntityScore(g.name, cleaned);
@@ -745,28 +747,28 @@ function findChatGroup(db: any, query: { id?: any; name?: string; text?: string 
   return bestScore >= 40 ? bestMatch : null;
 }
 
-function findProject(db: any, query: { id?: any; name?: string; text?: string }) {
+function findProject(db: DatabaseSync, query: { id?: string | number | null; name?: string; text?: string }) {
   let targetId = query.id ? Number(query.id) : null;
   if (!targetId && query.text) {
     targetId = extractEntityId(query.text, ['proyek', 'project']);
   }
   if (targetId) {
-    const row = db.prepare('SELECT id, nama_proyek FROM projects WHERE id = ?').get(targetId) as any;
+    const row = db.prepare('SELECT id, nama_proyek FROM projects WHERE id = ?').get(targetId) as Row;
     if (row) return row;
   }
-  const all = db.prepare('SELECT id, nama_proyek FROM projects').all() as any[];
+  const all = db.prepare('SELECT id, nama_proyek FROM projects').all() as Row[];
   if (!all.length) return null;
 
   const rawSearch = (query.name || '').toLowerCase().trim();
   if (rawSearch) {
-    const direct = all.find((p: any) => p.nama_proyek.toLowerCase() === rawSearch || p.nama_proyek.toLowerCase().includes(rawSearch) || rawSearch.includes(p.nama_proyek.toLowerCase()));
+    const direct = all.find((p: Row) => p.nama_proyek.toLowerCase() === rawSearch || p.nama_proyek.toLowerCase().includes(rawSearch) || rawSearch.includes(p.nama_proyek.toLowerCase()));
     if (direct) return direct;
   }
 
   const cleaned = cleanSearchQuery(query.text || query.name || '', ['proyek', 'project']);
   if (!cleaned) return null;
 
-  let bestMatch: any = null;
+  let bestMatch: Row | null = null;
   let bestScore = 0;
   for (const p of all) {
     const score = matchEntityScore(p.nama_proyek, cleaned);
@@ -778,28 +780,28 @@ function findProject(db: any, query: { id?: any; name?: string; text?: string })
   return bestScore >= 40 ? bestMatch : null;
 }
 
-function findTask(db: any, query: { id?: any; name?: string; text?: string }) {
+function findTask(db: DatabaseSync, query: { id?: string | number | null; name?: string; text?: string }) {
   let targetId = query.id ? Number(query.id) : null;
   if (!targetId && query.text) {
     targetId = extractEntityId(query.text, ['tugas', 'task', 'realisasi', 'kendala', 'blocker']);
   }
   if (targetId) {
-    const row = db.prepare('SELECT id, aktivitas FROM realisasi WHERE id = ?').get(targetId) as any;
+    const row = db.prepare('SELECT id, aktivitas FROM realisasi WHERE id = ?').get(targetId) as Row;
     if (row) return row;
   }
-  const all = db.prepare('SELECT id, aktivitas FROM realisasi').all() as any[];
+  const all = db.prepare('SELECT id, aktivitas FROM realisasi').all() as Row[];
   if (!all.length) return null;
 
   const rawSearch = (query.name || '').toLowerCase().trim();
   if (rawSearch) {
-    const direct = all.find((t: any) => t.aktivitas.toLowerCase() === rawSearch || t.aktivitas.toLowerCase().includes(rawSearch) || rawSearch.includes(t.aktivitas.toLowerCase()));
+    const direct = all.find((t: Row) => t.aktivitas.toLowerCase() === rawSearch || t.aktivitas.toLowerCase().includes(rawSearch) || rawSearch.includes(t.aktivitas.toLowerCase()));
     if (direct) return direct;
   }
 
   const cleaned = cleanSearchQuery(query.text || query.name || '', ['tugas', 'task', 'realisasi']);
   if (!cleaned) return null;
 
-  let bestMatch: any = null;
+  let bestMatch: Row | null = null;
   let bestScore = 0;
   for (const t of all) {
     const score = matchEntityScore(t.aktivitas, cleaned);
@@ -811,28 +813,28 @@ function findTask(db: any, query: { id?: any; name?: string; text?: string }) {
   return bestScore >= 40 ? bestMatch : null;
 }
 
-function findNote(db: any, query: { id?: any; name?: string; text?: string }) {
+function findNote(db: DatabaseSync, query: { id?: string | number | null; name?: string; text?: string }) {
   let targetId = query.id ? Number(query.id) : null;
   if (!targetId && query.text) {
     targetId = extractEntityId(query.text, ['note', 'notes', 'memo', 'catatan', 'sop', 'checklist']);
   }
   if (targetId) {
-    const row = db.prepare('SELECT id, title FROM notes WHERE id = ?').get(targetId) as any;
+    const row = db.prepare('SELECT id, title FROM notes WHERE id = ?').get(targetId) as Row;
     if (row) return row;
   }
-  const all = db.prepare('SELECT id, title FROM notes').all() as any[];
+  const all = db.prepare('SELECT id, title FROM notes').all() as Row[];
   if (!all.length) return null;
 
   const rawSearch = (query.name || '').toLowerCase().trim();
   if (rawSearch) {
-    const direct = all.find((n: any) => n.title.toLowerCase() === rawSearch || n.title.toLowerCase().includes(rawSearch) || rawSearch.includes(n.title.toLowerCase()));
+    const direct = all.find((n: Row) => n.title.toLowerCase() === rawSearch || n.title.toLowerCase().includes(rawSearch) || rawSearch.includes(n.title.toLowerCase()));
     if (direct) return direct;
   }
 
   const cleaned = cleanSearchQuery(query.text || query.name || '', ['note', 'notes', 'memo', 'catatan']);
   if (!cleaned) return null;
 
-  let bestMatch: any = null;
+  let bestMatch: Row | null = null;
   let bestScore = 0;
   for (const n of all) {
     const score = matchEntityScore(n.title, cleaned);
@@ -844,28 +846,28 @@ function findNote(db: any, query: { id?: any; name?: string; text?: string }) {
   return bestScore >= 40 ? bestMatch : null;
 }
 
-function findCalendarEvent(db: any, query: { id?: any; name?: string; text?: string }) {
+function findCalendarEvent(db: DatabaseSync, query: { id?: string | number | null; name?: string; text?: string }) {
   let targetId = query.id ? Number(query.id) : null;
   if (!targetId && query.text) {
     targetId = extractEntityId(query.text, ['agenda', 'kalender', 'event', 'jadwal', 'rapat', 'meeting', 'acara']);
   }
   if (targetId) {
-    const row = db.prepare('SELECT id, title, date, start_time, end_time FROM calendar_events WHERE id = ?').get(targetId) as any;
+    const row = db.prepare('SELECT id, title, date, start_time, end_time FROM calendar_events WHERE id = ?').get(targetId) as Row;
     if (row) return row;
   }
-  const all = db.prepare('SELECT id, title, date, start_time, end_time FROM calendar_events').all() as any[];
+  const all = db.prepare('SELECT id, title, date, start_time, end_time FROM calendar_events').all() as Row[];
   if (!all.length) return null;
 
   const rawSearch = (query.name || '').toLowerCase().trim();
   if (rawSearch) {
-    const direct = all.find((e: any) => e.title.toLowerCase() === rawSearch || e.title.toLowerCase().includes(rawSearch) || rawSearch.includes(e.title.toLowerCase()));
+    const direct = all.find((e: Row) => e.title.toLowerCase() === rawSearch || e.title.toLowerCase().includes(rawSearch) || rawSearch.includes(e.title.toLowerCase()));
     if (direct) return direct;
   }
 
   const cleaned = cleanSearchQuery(query.text || query.name || '', ['agenda', 'kalender', 'event', 'jadwal']);
   if (!cleaned) return null;
 
-  let bestMatch: any = null;
+  let bestMatch: Row | null = null;
   let bestScore = 0;
   for (const e of all) {
     const score = matchEntityScore(e.title, cleaned);
@@ -877,21 +879,21 @@ function findCalendarEvent(db: any, query: { id?: any; name?: string; text?: str
   return bestScore >= 40 ? bestMatch : null;
 }
 
-function findUser(db: any, query: { id?: any; username?: string; name?: string; text?: string }) {
+function findUser(db: DatabaseSync, query: { id?: string | number | null; username?: string; name?: string; text?: string }) {
   let targetId = query.id ? Number(query.id) : null;
   if (!targetId && query.text) {
     targetId = extractEntityId(query.text, ['user', 'pengguna', 'anggota', 'karyawan', 'akun', 'member']);
   }
   if (targetId) {
-    const row = db.prepare('SELECT id, username, nama, divisi, role, gender FROM users WHERE id = ?').get(targetId) as any;
+    const row = db.prepare('SELECT id, username, nama, divisi, role, gender FROM users WHERE id = ?').get(targetId) as Row;
     if (row) return row;
   }
-  const all = db.prepare('SELECT id, username, nama, divisi, role, gender FROM users').all() as any[];
+  const all = db.prepare('SELECT id, username, nama, divisi, role, gender FROM users').all() as Row[];
   if (!all.length) return null;
 
   const rawSearch = (query.username || query.name || '').toLowerCase().trim();
   if (rawSearch) {
-    const direct = all.find((u: any) =>
+    const direct = all.find((u: Row) =>
       u.username.toLowerCase() === rawSearch ||
       u.nama.toLowerCase() === rawSearch ||
       u.username.toLowerCase().includes(rawSearch) ||
@@ -921,35 +923,35 @@ function findUser(db: any, query: { id?: any; username?: string; name?: string; 
   return null;
 }
 
-function findProjectLink(db: any, query: { id?: any; title?: string; text?: string; projectId?: any }) {
+function findProjectLink(db: DatabaseSync, query: { id?: string | number | null; title?: string; text?: string; projectId?: string | number | null }) {
   let targetId = query.id ? Number(query.id) : null;
   if (!targetId && query.text) {
     targetId = extractEntityId(query.text, ['link', 'tautan', 'resource', 'figma', 'drive', 'notion', 'github', 'sheets']);
   }
   if (targetId) {
-    const row = db.prepare('SELECT id, project_id, title, url, platform FROM project_links WHERE id = ?').get(targetId) as any;
+    const row = db.prepare('SELECT id, project_id, title, url, platform FROM project_links WHERE id = ?').get(targetId) as Row;
     if (row) return row;
   }
   let sql = 'SELECT id, project_id, title, url, platform FROM project_links';
-  const params: any[] = [];
+  const params: (string | number | null)[] = [];
   if (query.projectId) {
     sql += ' WHERE project_id = ?';
     params.push(Number(query.projectId));
   }
   sql += ' ORDER BY id DESC';
-  const all = db.prepare(sql).all(...params) as any[];
+  const all = db.prepare(sql).all(...params) as Row[];
   if (!all.length) return null;
 
   const rawSearch = (query.title || '').toLowerCase().trim();
   if (rawSearch) {
-    const direct = all.find((l: any) => l.title.toLowerCase() === rawSearch || l.title.toLowerCase().includes(rawSearch) || rawSearch.includes(l.title.toLowerCase()));
+    const direct = all.find((l: Row) => l.title.toLowerCase() === rawSearch || l.title.toLowerCase().includes(rawSearch) || rawSearch.includes(l.title.toLowerCase()));
     if (direct) return direct;
   }
 
   const cleaned = cleanSearchQuery(query.text || query.title || '', ['link', 'tautan', 'figma', 'drive', 'notion', 'github', 'sheets']);
   if (!cleaned) return query.text ? null : all[0];
 
-  let bestMatch: any = null;
+  let bestMatch: Row | null = null;
   let bestScore = 0;
   for (const l of all) {
     const score = matchEntityScore(l.title, cleaned);
@@ -961,35 +963,35 @@ function findProjectLink(db: any, query: { id?: any; title?: string; text?: stri
   return bestScore >= 30 ? bestMatch : (query.text ? null : all[0]);
 }
 
-function findClientNote(db: any, query: { id?: any; keyword?: string; text?: string; projectId?: any }) {
+function findClientNote(db: DatabaseSync, query: { id?: string | number | null; keyword?: string; text?: string; projectId?: string | number | null }) {
   let targetId = query.id ? Number(query.id) : null;
   if (!targetId && query.text) {
     targetId = extractEntityId(query.text, ['klien', 'client', 'revisi', 'feedback', 'catatan', 'portal', 'note']);
   }
   if (targetId) {
-    const row = db.prepare('SELECT id, project_id, author_name, author_role, message, category, status FROM project_client_notes WHERE id = ?').get(targetId) as any;
+    const row = db.prepare('SELECT id, project_id, author_name, author_role, message, category, status FROM project_client_notes WHERE id = ?').get(targetId) as Row;
     if (row) return row;
   }
   let sql = 'SELECT id, project_id, author_name, author_role, message, category, status FROM project_client_notes';
-  const params: any[] = [];
+  const params: (string | number | null)[] = [];
   if (query.projectId) {
     sql += ' WHERE project_id = ?';
     params.push(Number(query.projectId));
   }
   sql += ' ORDER BY id DESC';
-  const all = db.prepare(sql).all(...params) as any[];
+  const all = db.prepare(sql).all(...params) as Row[];
   if (!all.length) return null;
 
   const rawSearch = (query.keyword || '').toLowerCase().trim();
   if (rawSearch) {
-    const direct = all.find((n: any) => n.message.toLowerCase().includes(rawSearch) || n.author_name.toLowerCase().includes(rawSearch));
+    const direct = all.find((n: Row) => n.message.toLowerCase().includes(rawSearch) || n.author_name.toLowerCase().includes(rawSearch));
     if (direct) return direct;
   }
 
   const cleaned = cleanSearchQuery(query.text || query.keyword || '', ['revisi', 'feedback', 'catatan', 'klien', 'client', 'portal', 'note']);
   if (!cleaned) return query.text ? null : all[0];
 
-  let bestMatch: any = null;
+  let bestMatch: Row | null = null;
   let bestScore = 0;
   for (const n of all) {
     const score = matchEntityScore(n.message, cleaned) + matchEntityScore(n.author_name, cleaned);
@@ -1001,17 +1003,17 @@ function findClientNote(db: any, query: { id?: any; keyword?: string; text?: str
   return bestScore >= 20 ? bestMatch : (query.text ? null : all[0]);
 }
 
-function computeSprintAnalytics(db: any) {
+function computeSprintAnalytics(db: DatabaseSync) {
   const allRealisasi = db.prepare(`
     SELECT r.*, p.nama_proyek
     FROM realisasi r
     LEFT JOIN projects p ON r.project_id = p.id
-  `).all() as any[];
+  `).all() as Row[];
 
   const totalTasks = allRealisasi.length;
-  const tercapaiTasks = allRealisasi.filter((r: any) => r.status === 'Tercapai').length;
-  const avgPct = totalTasks > 0 ? Math.round(allRealisasi.reduce((sum: number, r: any) => sum + (Number(r.persentase) || 0), 0) / totalTasks) : 0;
-  const activeBlockers = allRealisasi.filter((r: any) => r.kendala && r.kendala.trim() !== '');
+  const tercapaiTasks = allRealisasi.filter((r: Row) => r.status === 'Tercapai').length;
+  const avgPct = totalTasks > 0 ? Math.round(allRealisasi.reduce((sum: number, r: Row) => sum + (Number(r.persentase) || 0), 0) / totalTasks) : 0;
+  const activeBlockers = allRealisasi.filter((r: Row) => r.kendala && r.kendala.trim() !== '');
 
   const divisionMap = new Map<string, { total: number; avgPct: number; tercapai: number; blockers: number }>();
   for (const r of allRealisasi) {
@@ -1078,7 +1080,7 @@ function parseChecklistTarget(lastUserMsg: string): { itemIdx: number; itemText:
   return { itemIdx, itemText: cleanedItemText, isExplicitDone };
 }
 
-function parseCalendarReschedule(lastUserMsg: string, currentEvent: any): { date: string; startTime: string; endTime: string; title: string | null } {
+function parseCalendarReschedule(lastUserMsg: string, currentEvent: Row): { date: string; startTime: string; endTime: string; title: string | null } {
   const low = lastUserMsg.toLowerCase();
   let date = currentEvent.date;
   const dateMatch = lastUserMsg.match(/\b(\d{4}-\d{2}-\d{2})\b/);
@@ -1103,7 +1105,7 @@ function parseCalendarReschedule(lastUserMsg: string, currentEvent: any): { date
   return { date, startTime, endTime, title };
 }
 
-function parseUserUpdate(lastUserMsg: string, currentUser: any): { nama: string | null; divisi: string; role: string; gender: string } {
+function parseUserUpdate(lastUserMsg: string, currentUser: Row): { nama: string | null; divisi: string; role: string; gender: string } {
   const low = lastUserMsg.toLowerCase();
 
   let divisi = currentUser.divisi;
@@ -1158,13 +1160,13 @@ function parseClientNoteUpdate(lastUserMsg: string): string {
 }
 
 function handleDangerousAction(
-  db: any,
+  db: DatabaseSync,
   userId: number,
   sapaan: string,
   actionName: string,
-  args: any,
+  args: Row,
   rawUserText: string
-): { actionPending: any; aiResponseText: string } {
+): { actionPending: Row | null; aiResponseText: string } {
   const textLower = (rawUserText || '').toLowerCase();
   const isExplicitAll = Boolean(args.all) || textLower.includes('semua') || textLower.includes('all') || textLower.includes('seluruh') || textLower.includes('total');
 
@@ -1205,7 +1207,7 @@ function handleDangerousAction(
         aiResponseText: `⚠️ **Permintaan Penghapusan Grup Chat**: ${sapaan}, grup obrolan **"${g.name}"** (ID: ${g.id}) akan dihapus secara permanen.\n\nSesuai protokol keamanan sistem, tindakan destruktif ini memerlukan persetujuan lu. Izinkan aksi ini?`,
       };
     } else {
-      const allGroups = db.prepare('SELECT id, name FROM chat_groups').all() as any[];
+      const allGroups = db.prepare('SELECT id, name FROM chat_groups').all() as Row[];
       const count = allGroups.length;
       if (count === 0) {
         return {
@@ -1268,7 +1270,7 @@ function handleDangerousAction(
         aiResponseText: `⚠️ **Permintaan Penghapusan Proyek**: ${sapaan}, proyek **"${p.nama_proyek}"** (ID: ${p.id}) akan dihapus permanen beserta data terkaitnya. Izinkan penghapusan?`,
       };
     } else {
-      const allProjects = db.prepare('SELECT id, nama_proyek FROM projects').all() as any[];
+      const allProjects = db.prepare('SELECT id, nama_proyek FROM projects').all() as Row[];
       const count = allProjects.length;
       if (count === 0) {
         return {
@@ -1331,7 +1333,7 @@ function handleDangerousAction(
         aiResponseText: `⚠️ **Permintaan Hapus Tugas**: ${sapaan}, tugas **"${t.aktivitas}"** (ID: ${t.id}) akan dihapus. Izinkan penghapusan?`,
       };
     } else {
-      const allTasks = db.prepare('SELECT id, aktivitas FROM realisasi').all() as any[];
+      const allTasks = db.prepare('SELECT id, aktivitas FROM realisasi').all() as Row[];
       const count = allTasks.length;
       if (count === 0) {
         return {
@@ -1394,7 +1396,7 @@ function handleDangerousAction(
         aiResponseText: `⚠️ **Permintaan Hapus Catatan**: ${sapaan}, memo **"${n.title}"** (ID: ${n.id}) akan dihapus. Izinkan?`,
       };
     } else {
-      const allNotes = db.prepare('SELECT id, title FROM notes').all() as any[];
+      const allNotes = db.prepare('SELECT id, title FROM notes').all() as Row[];
       const count = allNotes.length;
       if (count === 0) {
         return {
@@ -1457,7 +1459,7 @@ function handleDangerousAction(
         aiResponseText: `⚠️ **Permintaan Hapus Agenda**: ${sapaan}, agenda **"${e.title}"** (ID: ${e.id}) akan dihapus. Izinkan?`,
       };
     } else {
-      const allEvents = db.prepare('SELECT id, title FROM calendar_events').all() as any[];
+      const allEvents = db.prepare('SELECT id, title FROM calendar_events').all() as Row[];
       const count = allEvents.length;
       if (count === 0) {
         return {
@@ -1521,7 +1523,7 @@ function handleDangerousAction(
         aiResponseText: `⚠️ **Permintaan Hapus Pengguna**: ${sapaan}, akun pengguna **${uName}** (ID: ${u.id}) akan dihapus dari sistem. Izinkan tindakan destruktif ini?`,
       };
     } else {
-      const nonAdmins = db.prepare("SELECT id, username, nama FROM users WHERE role != 'admin'").all() as any[];
+      const nonAdmins = db.prepare("SELECT id, username, nama FROM users WHERE role != 'admin'").all() as Row[];
       if (nonAdmins.length === 1) {
         const singleU = nonAdmins[0];
         const uName = `${singleU.nama} (@${singleU.username})`;
@@ -1637,7 +1639,7 @@ function handleDangerousAction(
 }
 
 function executeNudge(
-  db: any,
+  db: DatabaseSync,
   sapaan: string,
   args: { user_id?: number; nama?: string; alasan?: string; pesan?: string; all_unsubmitted?: boolean },
   rawUserText: string,
@@ -1682,9 +1684,9 @@ function executeNudge(
       nudgedNames.push(u.nama);
     }
   } else {
-    let targetUser: any = null;
+    let targetUser: Row | null = null;
     if (args.user_id) {
-      targetUser = db.prepare('SELECT id, nama FROM users WHERE id = ?').get(Number(args.user_id));
+      targetUser = db.prepare('SELECT id, nama FROM users WHERE id = ?').get(Number(args.user_id)) as Row | undefined ?? null;
     }
     if (!targetUser && args.nama) {
       targetUser = findUser(db, { name: args.nama });
@@ -1702,7 +1704,7 @@ function executeNudge(
           SELECT DISTINCT COALESCE(assigned_to_user_id, user_id) FROM realisasi
           WHERE tanggal = ? AND (realisasi > 0 OR assigned_by_user_id IS NULL)
         ) LIMIT 1
-      `).get(todayStr) as any;
+      `).get(todayStr) as Row;
       targetUser = unsubmitted || db.prepare("SELECT id, nama FROM users WHERE role != 'admin' LIMIT 1").get();
     }
 
@@ -1740,7 +1742,7 @@ function executeNudge(
 }
 
 function executeSendChatMessage(
-  db: any,
+  db: DatabaseSync,
   sapaan: string,
   args: { group_id?: number; group_name?: string; message?: string },
   rawUserText: string,
@@ -1748,9 +1750,9 @@ function executeSendChatMessage(
 ) {
   const textLower = (rawUserText || '').toLowerCase();
 
-  let targetGroup: any = null;
+  let targetGroup: Row | null = null;
   if (args.group_id) {
-    targetGroup = db.prepare('SELECT id, name FROM chat_groups WHERE id = ?').get(Number(args.group_id));
+    targetGroup = db.prepare('SELECT id, name FROM chat_groups WHERE id = ?').get(Number(args.group_id)) as Row | undefined ?? null;
   }
   if (!targetGroup && args.group_name) {
     targetGroup = findChatGroup(db, { name: args.group_name });
@@ -1762,7 +1764,7 @@ function executeSendChatMessage(
     targetGroup = findChatGroup(db, { text: prevContextText });
   }
   if (!targetGroup) {
-    const allGroups = db.prepare('SELECT id, name FROM chat_groups').all() as any[];
+    const allGroups = db.prepare('SELECT id, name FROM chat_groups').all() as Row[];
     if (allGroups.length > 0) targetGroup = allGroups[0];
   }
 
@@ -1775,8 +1777,8 @@ function executeSendChatMessage(
     };
   }
 
-  let taggedUser: any = null;
-  const allUsers = db.prepare('SELECT id, nama, username FROM users').all() as any[];
+  let taggedUser: Row | null = null;
+  const allUsers = db.prepare('SELECT id, nama, username FROM users').all() as Row[];
   for (const u of allUsers) {
     if (textLower.includes(u.nama.toLowerCase()) || textLower.includes(u.username.toLowerCase())) {
       taggedUser = u;
@@ -1787,7 +1789,7 @@ function executeSendChatMessage(
     taggedUser = findUser(db, { text: prevContextText });
   }
   if (!taggedUser) {
-    taggedUser = allUsers.find((u: any) => u.nama.toLowerCase().includes('tim 2') || u.id === 4) || allUsers[1] || allUsers[0];
+    taggedUser = allUsers.find((u: Row) => u.nama.toLowerCase().includes('tim 2') || u.id === 4) || allUsers[1] || allUsers[0];
   }
 
   let msg = args.message || '';
@@ -1855,7 +1857,7 @@ function executeSendChatMessage(
 }
 
 function executeAddGroupMember(
-  db: any,
+  db: DatabaseSync,
   sapaan: string,
   args: { group_id?: number; group_name?: string; user_id?: number; nama?: string; role?: string },
   rawUserText: string,
@@ -1863,9 +1865,9 @@ function executeAddGroupMember(
 ) {
   const textLower = (rawUserText || '').toLowerCase();
 
-  let targetGroup: any = null;
+  let targetGroup: Row | null = null;
   if (args.group_id) {
-    targetGroup = db.prepare('SELECT id, name FROM chat_groups WHERE id = ?').get(Number(args.group_id));
+    targetGroup = db.prepare('SELECT id, name FROM chat_groups WHERE id = ?').get(Number(args.group_id)) as Row | undefined ?? null;
   }
   if (!targetGroup && args.group_name) {
     targetGroup = findChatGroup(db, { name: args.group_name });
@@ -1877,13 +1879,13 @@ function executeAddGroupMember(
     targetGroup = findChatGroup(db, { text: prevContextText });
   }
   if (!targetGroup) {
-    const allGroups = db.prepare('SELECT id, name FROM chat_groups').all() as any[];
+    const allGroups = db.prepare('SELECT id, name FROM chat_groups').all() as Row[];
     if (allGroups.length > 0) targetGroup = allGroups[0];
   }
 
-  let targetUser: any = null;
+  let targetUser: Row | null = null;
   if (args.user_id) {
-    targetUser = db.prepare('SELECT id, nama, username FROM users WHERE id = ?').get(Number(args.user_id));
+    targetUser = db.prepare('SELECT id, nama, username FROM users WHERE id = ?').get(Number(args.user_id)) as Row | undefined ?? null;
   }
   if (!targetUser && args.nama) {
     targetUser = findUser(db, { name: args.nama });
@@ -1899,8 +1901,8 @@ function executeAddGroupMember(
       SELECT id, nama, username FROM users
       WHERE id NOT IN (SELECT user_id FROM chat_group_members WHERE group_id = ?)
       LIMIT 1
-    `).get(targetGroup.id) as any;
-    targetUser = candidate || (db.prepare('SELECT id, nama, username FROM users ORDER BY id DESC LIMIT 1').get() as any);
+    `).get(targetGroup.id) as Row;
+    targetUser = candidate || (db.prepare('SELECT id, nama, username FROM users ORDER BY id DESC LIMIT 1').get() as Row);
   }
 
   if (!targetGroup || !targetUser) {
@@ -1968,15 +1970,15 @@ function executeAddGroupMember(
 }
 
 function executeRemoveGroupMember(
-  db: any,
+  db: DatabaseSync,
   sapaan: string,
   args: { group_id?: number; group_name?: string; user_id?: number; nama?: string },
   rawUserText: string,
   prevContextText: string = ''
 ) {
-  let targetGroup: any = null;
+  let targetGroup: Row | null = null;
   if (args.group_id) {
-    targetGroup = db.prepare('SELECT id, name FROM chat_groups WHERE id = ?').get(Number(args.group_id));
+    targetGroup = db.prepare('SELECT id, name FROM chat_groups WHERE id = ?').get(Number(args.group_id)) as Row | undefined ?? null;
   }
   if (!targetGroup && args.group_name) {
     targetGroup = findChatGroup(db, { name: args.group_name });
@@ -1988,13 +1990,13 @@ function executeRemoveGroupMember(
     targetGroup = findChatGroup(db, { text: prevContextText });
   }
   if (!targetGroup) {
-    const allGroups = db.prepare('SELECT id, name FROM chat_groups').all() as any[];
+    const allGroups = db.prepare('SELECT id, name FROM chat_groups').all() as Row[];
     if (allGroups.length > 0) targetGroup = allGroups[0];
   }
 
-  let targetUser: any = null;
+  let targetUser: Row | null = null;
   if (args.user_id) {
-    targetUser = db.prepare('SELECT id, nama, username FROM users WHERE id = ?').get(Number(args.user_id));
+    targetUser = db.prepare('SELECT id, nama, username FROM users WHERE id = ?').get(Number(args.user_id)) as Row | undefined ?? null;
   }
   if (!targetUser && args.nama) {
     targetUser = findUser(db, { name: args.nama });
@@ -2044,7 +2046,7 @@ function executeRemoveGroupMember(
 
 function parseTasksFromText(
   rawUserText: string,
-  targetProj: any,
+  targetProj: Row,
   todayStr: string
 ): Array<{ aktivitas: string; target: number; satuan: string; tanggal: string; user_id?: number }> {
   const text = (rawUserText || '').trim();
@@ -2155,18 +2157,18 @@ function parseTasksFromText(
 }
 
 function executePlanTasks(
-  db: any,
+  db: DatabaseSync,
   sapaan: string,
-  args: { project_id?: number; project_name?: string; tasks?: Array<any> },
+  args: { project_id?: number; project_name?: string; tasks?: Row[] },
   rawUserText: string,
   defaultUserId: number,
   defaultDivisi: string,
   todayStr: string,
   prevContextText: string = ''
 ) {
-  let targetProj: any = null;
+  let targetProj: Row | null = null;
   if (args.project_id) {
-    targetProj = db.prepare('SELECT id, nama_proyek, target_total, satuan, divisi, pic_id FROM projects WHERE id = ?').get(Number(args.project_id));
+    targetProj = db.prepare('SELECT id, nama_proyek, target_total, satuan, divisi, pic_id FROM projects WHERE id = ?').get(Number(args.project_id)) as Row | undefined ?? null;
   }
   if (!targetProj && args.project_name) {
     targetProj = findProject(db, { name: args.project_name });
@@ -2178,14 +2180,14 @@ function executePlanTasks(
     targetProj = findProject(db, { text: prevContextText });
   }
   if (!targetProj) {
-    const allProjects = db.prepare('SELECT id, nama_proyek, target_total, satuan, divisi, pic_id FROM projects').all() as any[];
+    const allProjects = db.prepare('SELECT id, nama_proyek, target_total, satuan, divisi, pic_id FROM projects').all() as Row[];
     if (allProjects.length > 0) targetProj = allProjects[0];
   }
 
   // Determine assigned user
-  let assignedUser: any = null;
+  let assignedUser: Row | null = null;
   if (args.tasks && args.tasks[0]?.user_id) {
-    assignedUser = db.prepare('SELECT id, nama, divisi FROM users WHERE id = ?').get(Number(args.tasks[0].user_id));
+    assignedUser = db.prepare('SELECT id, nama, divisi FROM users WHERE id = ?').get(Number(args.tasks[0].user_id)) as Row | undefined ?? null;
   }
   if (!assignedUser) {
     assignedUser = findUser(db, { text: rawUserText });
@@ -2194,7 +2196,7 @@ function executePlanTasks(
     assignedUser = findUser(db, { text: prevContextText });
   }
   if (!assignedUser && targetProj && targetProj.pic_id) {
-    assignedUser = db.prepare('SELECT id, nama, divisi FROM users WHERE id = ?').get(targetProj.pic_id);
+    assignedUser = db.prepare('SELECT id, nama, divisi FROM users WHERE id = ?').get(targetProj.pic_id) as Row | undefined ?? null;
   }
   if (!assignedUser) {
     assignedUser = db.prepare('SELECT id, nama, divisi FROM users WHERE id = ?').get(defaultUserId) || {
@@ -2204,10 +2206,10 @@ function executePlanTasks(
     };
   }
 
-  let tasksList: Array<any> = Array.isArray(args.tasks) && args.tasks.length > 0 ? args.tasks : [];
+  let tasksList: Row[] = Array.isArray(args.tasks) && args.tasks.length > 0 ? args.tasks : [];
 
   if (tasksList.length === 0) {
-    tasksList = parseTasksFromText(rawUserText, targetProj, todayStr);
+    tasksList = parseTasksFromText(rawUserText, targetProj as Row, todayStr);
   }
 
   const insertedTasks: string[] = [];
@@ -2218,7 +2220,7 @@ function executePlanTasks(
     let taskDivisi = assignedUser.divisi || defaultDivisi;
 
     if (t.user_id && Number(t.user_id) !== assignedUser.id) {
-      const u = db.prepare('SELECT nama, divisi FROM users WHERE id = ?').get(Number(t.user_id)) as any;
+      const u = db.prepare('SELECT nama, divisi FROM users WHERE id = ?').get(Number(t.user_id)) as Row;
       if (u) {
         taskNama = u.nama;
         taskDivisi = u.divisi;
@@ -2331,9 +2333,9 @@ function compactChatHistory(olderMessages: Array<{ role: string; content: string
  */
 function buildSystemExecutionLog(
   toolExecuted: string | null,
-  uiAction: any | null,
-  actionPending: any | null,
-  actionResult: any | null,
+  uiAction: Row | null,
+  actionPending: Row | null,
+  actionResult: Row | null,
   isCriticalReject: boolean,
   isOutOfScopeRefusal: boolean = false
 ): string {
@@ -2371,9 +2373,9 @@ function buildSystemExecutionLog(
 function generateSuggestions(context: {
   lastUserMsg?: string;
   aiResponseText?: string;
-  actionPending?: any | null;
+  actionPending?: Row | null;
   toolExecuted?: string | null;
-  uiAction?: any | null;
+  uiAction?: Row | null;
   isCriticalReject?: boolean;
   isOutOfScopeRefusal?: boolean;
 }): string[] {
@@ -2807,11 +2809,11 @@ function generateSuggestions(context: {
 }
 
 function executeAutonomousIntent(options: {
-  db: any;
+  db: DatabaseSync;
   sapaan: string;
   lastUserMsg: string;
   lastUserLower: string;
-  user_id: any;
+  user_id: number | string | null | undefined;
   user_nama: string;
   user_divisi: string;
   todayStr: string;
@@ -2819,9 +2821,9 @@ function executeAutonomousIntent(options: {
   prevContextMsg: string;
 }): {
   aiResponseText: string;
-  actionResult?: any;
-  actionPending?: any;
-  uiAction?: any;
+  actionResult?: Row | null;
+  actionPending?: Row | null;
+  uiAction?: Row | null;
   toolExecuted?: string;
 } {
   const { db, sapaan, lastUserMsg, lastUserLower, user_id, user_nama, user_divisi, todayStr, firstName, prevContextMsg } = options;
@@ -2926,7 +2928,7 @@ function executeAutonomousIntent(options: {
       else if (lowUrl.includes('github.com') || lowUrl.includes('gitlab.com')) detectedPlatform = 'github';
       else if (lowUrl.includes('docs.google.com/spreadsheets') || lowUrl.includes('airtable.com')) detectedPlatform = 'sheets';
 
-      const p = findProject(db, { text: lastUserMsg }) || (db.prepare('SELECT id, nama_proyek FROM projects LIMIT 1').get() as any);
+      const p = findProject(db, { text: lastUserMsg }) || (db.prepare('SELECT id, nama_proyek FROM projects LIMIT 1').get() as Row);
       const pId = p ? p.id : 1;
       const pName = p ? p.nama_proyek : 'Proyek';
       const linkTitle =
@@ -2988,7 +2990,7 @@ function executeAutonomousIntent(options: {
         };
       }
     } else {
-      const p = findProject(db, { text: lastUserMsg }) || (db.prepare('SELECT id, nama_proyek FROM projects LIMIT 1').get() as any);
+      const p = findProject(db, { text: lastUserMsg }) || (db.prepare('SELECT id, nama_proyek FROM projects LIMIT 1').get() as Row);
       const pId = p ? p.id : 1;
       const pName = p ? p.nama_proyek : 'Proyek';
       const author = user_nama ? `${user_nama} (Klien)` : 'Klien Tamu';
@@ -3031,7 +3033,7 @@ function executeAutonomousIntent(options: {
     ) {
       const n = findNote(db, { text: lastUserMsg });
       if (n) {
-        const cur = db.prepare('SELECT pinned FROM notes WHERE id = ?').get(n.id) as any;
+        const cur = db.prepare('SELECT pinned FROM notes WHERE id = ?').get(n.id) as Row;
         let newPinned = 1;
         if (lastUserLower.includes('unpin') || lastUserLower.includes('lepas') || lastUserLower.includes('batal')) {
           newPinned = 0;
@@ -3059,8 +3061,8 @@ function executeAutonomousIntent(options: {
     } else {
       const n = findNote(db, { text: lastUserMsg });
       if (n) {
-        const row = db.prepare('SELECT checklist FROM notes WHERE id = ?').get(n.id) as any;
-        let list: any[] = [];
+        const row = db.prepare('SELECT checklist FROM notes WHERE id = ?').get(n.id) as Row;
+        let list: Row[] = [];
         try {
           list = JSON.parse(row?.checklist || '[]');
         } catch {
@@ -3075,7 +3077,7 @@ function executeAutonomousIntent(options: {
           list[parsed.itemIdx].done = finalDone;
           targetText = list[parsed.itemIdx].text;
         } else if (parsed.itemText) {
-          const matchedItem = list.find((it: any) => it.text && it.text.toLowerCase().includes(parsed.itemText.toLowerCase()));
+          const matchedItem = list.find((it: Row) => it.text && it.text.toLowerCase().includes(parsed.itemText.toLowerCase()));
           if (matchedItem) {
             finalDone = parsed.isExplicitDone !== null ? parsed.isExplicitDone : !matchedItem.done;
             matchedItem.done = finalDone;
@@ -3172,7 +3174,7 @@ function executeAutonomousIntent(options: {
     } else {
       const unreads = db
         .prepare('SELECT id, title, message, type FROM notifications WHERE (user_id = ? OR user_id IS NULL) AND is_read = 0 ORDER BY id DESC LIMIT 5')
-        .all(user_id ? Number(user_id) : 1) as any[];
+        .all(user_id ? Number(user_id) : 1) as Row[];
       return {
         toolExecuted: 'get_unread_notifications',
         actionResult: {
@@ -3430,7 +3432,7 @@ function executeAutonomousIntent(options: {
       toolExecuted: 'navigate_ui',
       uiAction: {
         action: p ? 'open_project' : 'navigate_tab',
-        tab: tab as any,
+        tab,
         projectId: p ? p.id : undefined,
         projectName: p ? p.nama_proyek : undefined,
         reason: 'Permintaan navigasi pengguna',
@@ -3466,7 +3468,7 @@ function executeAutonomousIntent(options: {
 
   if (lastUserLower.includes('tambah tugas') || lastUserLower.includes('buat tugas') || lastUserLower.includes('tugas baru') || lastUserLower.includes('input tugas')) {
     const cleanAct = lastUserMsg.replace(/tambah|buat|tugas|baru|input|realisasi|tolong|dong|bro|bestie/gi, ' ').replace(/\s+/g, ' ').trim() || 'Tugas Baru dari AI';
-    const p = findProject(db, { text: lastUserMsg }) || (db.prepare('SELECT id, nama_proyek FROM projects LIMIT 1').get() as any);
+    const p = findProject(db, { text: lastUserMsg }) || (db.prepare('SELECT id, nama_proyek FROM projects LIMIT 1').get() as Row);
     const pId = p ? p.id : 1;
     const ins = db
       .prepare("INSERT INTO realisasi (project_id, user_id, nama, divisi, tanggal, aktivitas, target, realisasi, satuan, persentase, status) VALUES (?, ?, ?, ?, ?, ?, 1, 1, 'Tugas', 100, 'Tercapai')")
@@ -3578,15 +3580,15 @@ export async function POST(req: Request) {
       : `Maaf Bro, gw adalah AI Asisten Operasional & Manajemen Proyek di Productivier. Gw nggak dirancang untuk bikin codingan bebas atau tugas di luar operasional tim kita. Yuk fokus bahas progres proyek, tugas harian, kalender, atau analisis sprint tim!`;
 
     // Context for prompt: Projects in database
-    const projects = db.prepare('SELECT id, nama_proyek, divisi, target_total, satuan, status, deadline FROM projects').all() as any[];
+    const projects = db.prepare('SELECT id, nama_proyek, divisi, target_total, satuan, status, deadline FROM projects').all() as Row[];
     const projectSummary = projects
-      .map((p: any) => `- ID ${p.id}: "${p.nama_proyek}" (${p.divisi}) [${p.status}] - Target: ${p.target_total} ${p.satuan} - Deadline: ${p.deadline || 'tidak ada'}`)
+      .map((p: Row) => `- ID ${p.id}: "${p.nama_proyek}" (${p.divisi}) [${p.status}] - Target: ${p.target_total} ${p.satuan} - Deadline: ${p.deadline || 'tidak ada'}`)
       .join('\n');
 
     // Context for prompt: Users in database
-    const dbUsers = db.prepare('SELECT id, username, nama, divisi, role FROM users').all() as any[];
+    const dbUsers = db.prepare('SELECT id, username, nama, divisi, role FROM users').all() as Row[];
     const userSummary = dbUsers
-      .map((u: any) => `- ID ${u.id}: "${u.nama}" (@${u.username}, Divisi: ${u.divisi}, Role: ${u.role})`)
+      .map((u: Row) => `- ID ${u.id}: "${u.nama}" (@${u.username}, Divisi: ${u.divisi}, Role: ${u.role})`)
       .join('\n');
 
     // Context for prompt: Chat Groups in database with connected projects
@@ -3602,9 +3604,9 @@ export async function POST(req: Request) {
           WHERE cgp.group_id = g.id
         ) as connected_projects
       FROM chat_groups g
-    `).all() as any[];
+    `).all() as Row[];
     const groupSummary = dbGroups
-      .map((g: any) => `- ID ${g.id}: "${g.name}" (${g.description || 'Grup Diskusi'}${g.connected_projects ? ` | Proyek Terhubung: ${g.connected_projects}` : ''})`)
+      .map((g: Row) => `- ID ${g.id}: "${g.name}" (${g.description || 'Grup Diskusi'}${g.connected_projects ? ` | Proyek Terhubung: ${g.connected_projects}` : ''})`)
       .join('\n');
 
     // Auto-compact chat history only when context is truly long (>16 messages or >6000 chars)
@@ -3874,7 +3876,7 @@ export async function POST(req: Request) {
         SELECT * FROM ai_action_requests
         WHERE (user_id = ? OR user_id = 1) AND status = 'pending'
         ORDER BY id DESC LIMIT 1
-      `).get(user_id ? Number(user_id) : 1) as any;
+      `).get(user_id ? Number(user_id) : 1) as Row;
 
       if (pendingReq) {
         const actionStatus = isConversationalRejection ? 'rejected' : 'approved';
@@ -4015,16 +4017,16 @@ ZERO-TOLERANCE ANTI-REFUSAL POLICY (MUTLAK BERLAKU):
 
     const apiMessages = [
       { role: 'system', content: systemPrompt },
-      ...recentMessages.map((m: any) => ({
+      ...recentMessages.map((m: Row) => ({
         role: m.role,
         content: m.content,
       })),
     ];
 
     let aiResponseText = '';
-    let actionResult: any = null;
-    let actionPending: any = null;
-    let uiAction: any = null;
+    let actionResult: Row | null = null;
+    let actionPending: Row | null = null;
+    let uiAction: Row | null = null;
     let toolExecuted: string | null = null;
     let isCriticalReject = false;
     let isOutOfScopeRefusal = false;
@@ -4035,7 +4037,7 @@ ZERO-TOLERANCE ANTI-REFUSAL POLICY (MUTLAK BERLAKU):
       const isErnie = activeModel.includes('ernie');
       const isNemotron = activeModel.includes('nemotron');
 
-      const openRouterPayload: any = {
+      const openRouterPayload: Row = {
         model: activeModel,
         messages: apiMessages,
         tools: TOOLS,
@@ -4138,7 +4140,7 @@ ZERO-TOLERANCE ANTI-REFUSAL POLICY (MUTLAK BERLAKU):
         nativeReasoning = aiMessage.reasoning_content.trim();
       } else if (Array.isArray(aiMessage?.reasoning_details)) {
         const textParts = aiMessage.reasoning_details
-          .map((d: any) => d.text || d.content || d.reasoning || '')
+          .map((d: Row) => d.text || d.content || d.reasoning || '')
           .filter(Boolean);
         if (textParts.length > 0) {
           nativeReasoning = textParts.join('\n').trim();
@@ -4147,10 +4149,10 @@ ZERO-TOLERANCE ANTI-REFUSAL POLICY (MUTLAK BERLAKU):
 
       // Check for <think>...</think> tags (and unclosed <think>...) in content
       if (typeof aiMessage?.content === 'string') {
-        const thinkMatches = Array.from(aiMessage.content.matchAll(/<think>([\s\S]*?)<\/think>/gi));
+        const thinkMatches: RegExpMatchArray[] = Array.from(aiMessage.content.matchAll(/<think>([\s\S]*?)<\/think>/gi));
         if (thinkMatches.length > 0) {
           if (!nativeReasoning) {
-            nativeReasoning = thinkMatches.map((m: any) => m[1].trim()).filter(Boolean).join('\n\n');
+            nativeReasoning = thinkMatches.map((m: RegExpMatchArray) => String(m[1]).trim()).filter(Boolean).join('\n\n');
           }
           aiMessage.content = aiMessage.content.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
         }
@@ -4174,7 +4176,7 @@ ZERO-TOLERANCE ANTI-REFUSAL POLICY (MUTLAK BERLAKU):
         const toolCall = aiMessage.tool_calls[0];
         const fnName = toolCall.function?.name;
         toolExecuted = fnName;
-        let fnArgs: any = {};
+        let fnArgs: Row = {};
         try {
           fnArgs = JSON.parse(toolCall.function?.arguments || '{}');
         } catch {
@@ -4467,9 +4469,9 @@ ZERO-TOLERANCE ANTI-REFUSAL POLICY (MUTLAK BERLAKU):
             SELECT p.*,
               COALESCE((SELECT SUM(r.realisasi) FROM realisasi r WHERE r.project_id = p.id), 0) as total_realisasi
             FROM projects p
-          `).all();
+          `).all() as Row[];
 
-          const summaryLines = allProjects.map((p: any) => {
+          const summaryLines = allProjects.map((p: Row) => {
             const pct = p.target_total > 0 ? Math.round((p.total_realisasi / p.target_total) * 100) : 0;
             return `• **${p.nama_proyek}** (${p.divisi}): ${pct}% (${p.total_realisasi}/${p.target_total} ${p.satuan}) [${p.status}]`;
           });
@@ -4500,7 +4502,7 @@ ZERO-TOLERANCE ANTI-REFUSAL POLICY (MUTLAK BERLAKU):
             toolExecuted = res.toolExecuted;
             actionResult = res.actionResult;
           } else {
-            const allUsers = db.prepare("SELECT id, nama, divisi, role FROM users WHERE role != 'admin' OR username = 'fifa'").all();
+            const allUsers = db.prepare("SELECT id, nama, divisi, role FROM users WHERE role != 'admin' OR username = 'fifa'").all() as Row[];
             const todayInputs = db.prepare(`
               SELECT COALESCE(assigned_to_user_id, user_id) as effective_user_id,
                      COUNT(*) as total,
@@ -4508,11 +4510,11 @@ ZERO-TOLERANCE ANTI-REFUSAL POLICY (MUTLAK BERLAKU):
               FROM realisasi
               WHERE tanggal = ? AND (realisasi > 0 OR assigned_by_user_id IS NULL)
               GROUP BY effective_user_id
-            `).all(todayStr);
-            const map = new Map(todayInputs.map((i: any) => [i.effective_user_id, i]));
+            `).all(todayStr) as Row[];
+            const map = new Map(todayInputs.map((i: Row) => [i.effective_user_id, i]));
 
-            const statusLines = allUsers.map((u: any) => {
-              const info: any = map.get(u.id);
+            const statusLines = allUsers.map((u: Row) => {
+              const info = map.get(u.id) as Row | undefined;
               const status = info ? `✅ Sudah setor (${info.total} tugas, rata-rata ${Math.round(info.avg_pct)}%)` : '⏳ Belum input hari ini';
               return `• **${u.nama}** (${u.divisi}): ${status}`;
             });
@@ -4524,9 +4526,9 @@ ZERO-TOLERANCE ANTI-REFUSAL POLICY (MUTLAK BERLAKU):
             SELECT p.*,
               COALESCE((SELECT SUM(r.realisasi) FROM realisasi r WHERE r.project_id = p.id), 0) as total_realisasi
             FROM projects p
-          `).all() as any[];
+          `).all() as Row[];
 
-          const allProjects = rawProjects.map((p: any) => {
+          const allProjects = rawProjects.map((p: Row) => {
             const target = Number(p.target_total) || 1;
             const total = Number(p.total_realisasi) || 0;
             return {
@@ -4541,12 +4543,12 @@ ZERO-TOLERANCE ANTI-REFUSAL POLICY (MUTLAK BERLAKU):
               SELECT DISTINCT COALESCE(assigned_to_user_id, user_id) FROM realisasi
               WHERE tanggal = ? AND (realisasi > 0 OR assigned_by_user_id IS NULL)
             )
-          `).all(todayStr) as any[];
+          `).all(todayStr) as Row[];
 
-          const lowProjects = allProjects.filter((p: any) => p.persentase < 50 && p.status === 'aktif');
+          const lowProjects = allProjects.filter((p: Row) => p.persentase < 50 && p.status === 'aktif');
 
           const tips = [
-            `1. **Push Proyek Kritis**: Ada ${lowProjects.length} proyek aktif yang capaiannya masih di bawah 50% (${lowProjects.map((p) => p.nama_proyek).join(', ') || 'Semua aman di atas 50%'}). Alokasikan 2-3 tugas prioritas ke sana sekarang.`,
+            `1. **Push Proyek Kritis**: Ada ${lowProjects.length} proyek aktif yang capaiannya masih di bawah 50% (${lowProjects.map((p: Row) => p.nama_proyek).join(', ') || 'Semua aman di atas 50%'}). Alokasikan 2-3 tugas prioritas ke sana sekarang.`,
             `2. **Monitoring Harian Tim**: ${pendingUsers.length > 0 ? `${pendingUsers.length} orang (${pendingUsers.map((u) => u.nama).join(', ')}) belum setor realisasi. Colek santai sebelum jam 17:00 biar data gak bolong.` : 'Keren! Seluruh anggota tim udah disiplin setor realisasi hari ini.'}`,
             `3. **Pace Target Mingguan**: Jangan biarkan tugas menumpuk di akhir pekan. Sinkronkan deadline di tab Kalender biar sprint tim tetap stabil.`,
           ];
@@ -4574,7 +4576,7 @@ ZERO-TOLERANCE ANTI-REFUSAL POLICY (MUTLAK BERLAKU):
           aiResponseText = res.aiResponseText;
           toolExecuted = fnName;
         } else if (fnName === 'create_project_link') {
-          const p = findProject(db, { id: fnArgs.project_id, name: fnArgs.project_name || fnArgs.target_name, text: lastUserMsg }) || db.prepare('SELECT id, nama_proyek FROM projects LIMIT 1').get() as any;
+          const p = findProject(db, { id: fnArgs.project_id, name: fnArgs.project_name || fnArgs.target_name, text: lastUserMsg }) || db.prepare('SELECT id, nama_proyek FROM projects LIMIT 1').get() as Row;
           const pId = p ? p.id : 1;
           const pName = p ? p.nama_proyek : 'Proyek';
           const title = (fnArgs.title || 'Tautan Resource').trim();
@@ -4610,7 +4612,7 @@ ZERO-TOLERANCE ANTI-REFUSAL POLICY (MUTLAK BERLAKU):
             aiResponseText = `ℹ️ **Tautan Tidak Ditemukan**: ${sapaan}, tautan yang dimaksud tidak ditemukan di Resource Hub.`;
           }
         } else if (fnName === 'create_client_note') {
-          const p = findProject(db, { id: fnArgs.project_id, name: fnArgs.project_name || fnArgs.target_name, text: lastUserMsg }) || db.prepare('SELECT id, nama_proyek FROM projects LIMIT 1').get() as any;
+          const p = findProject(db, { id: fnArgs.project_id, name: fnArgs.project_name || fnArgs.target_name, text: lastUserMsg }) || db.prepare('SELECT id, nama_proyek FROM projects LIMIT 1').get() as Row;
           const pId = p ? p.id : 1;
           const pName = p ? p.nama_proyek : 'Proyek';
           const author = (fnArgs.author_name || (user_nama ? `${user_nama} (Klien)` : 'Klien Tamu')).trim();
@@ -4645,7 +4647,7 @@ ZERO-TOLERANCE ANTI-REFUSAL POLICY (MUTLAK BERLAKU):
         } else if (fnName === 'toggle_note_pin') {
           const n = findNote(db, { id: fnArgs.note_id, name: fnArgs.target_title || fnArgs.title, text: lastUserMsg });
           if (n) {
-            const curRow = db.prepare('SELECT pinned FROM notes WHERE id = ?').get(n.id) as any;
+            const curRow = db.prepare('SELECT pinned FROM notes WHERE id = ?').get(n.id) as Row;
             const newPin = fnArgs.pinned !== undefined ? (fnArgs.pinned ? 1 : 0) : (curRow?.pinned ? 0 : 1);
             db.prepare('UPDATE notes SET pinned = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(newPin, n.id);
             actionResult = {
@@ -4660,12 +4662,12 @@ ZERO-TOLERANCE ANTI-REFUSAL POLICY (MUTLAK BERLAKU):
         } else if (fnName === 'update_note_checklist') {
           const n = findNote(db, { id: fnArgs.note_id, name: fnArgs.target_title || fnArgs.title, text: lastUserMsg });
           if (n) {
-            const curRow = db.prepare('SELECT checklist FROM notes WHERE id = ?').get(n.id) as any;
-            let list: any[] = [];
+            const curRow = db.prepare('SELECT checklist FROM notes WHERE id = ?').get(n.id) as Row;
+            let list: Row[] = [];
             try { list = JSON.parse(curRow?.checklist || '[]'); } catch { list = []; }
             const itemText = (fnArgs.item_text || '').trim();
             const done = fnArgs.done !== undefined ? Boolean(fnArgs.done) : true;
-            const foundIdx = list.findIndex((item: any, idx: number) =>
+            const foundIdx = list.findIndex((item: Row, idx: number) =>
               String(idx + 1) === itemText || (item.text && item.text.toLowerCase().includes(itemText.toLowerCase()))
             );
             if (foundIdx >= 0) {
@@ -4719,7 +4721,7 @@ ZERO-TOLERANCE ANTI-REFUSAL POLICY (MUTLAK BERLAKU):
             FROM notifications
             WHERE (user_id = ? OR user_id IS NULL) AND is_read = 0
             ORDER BY id DESC LIMIT 5
-          `).all(user_id ? Number(user_id) : 1) as any[];
+          `).all(user_id ? Number(user_id) : 1) as Row[];
 
           actionResult = {
             type: 'notifications_fetched',

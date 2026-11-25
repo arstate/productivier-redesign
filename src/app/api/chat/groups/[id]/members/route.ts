@@ -1,3 +1,4 @@
+import type { Row } from '@/types/db-rows';
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { requireAuth } from '@/lib/auth';
@@ -58,7 +59,7 @@ export async function POST(
     }
 
     const db = getDb();
-    const group = db.prepare('SELECT * FROM chat_groups WHERE id = ?').get(groupId) as any;
+    const group = db.prepare('SELECT * FROM chat_groups WHERE id = ?').get(groupId) as Row;
     if (!group) {
       return NextResponse.json({ error: 'Grup tidak ditemukan' }, { status: 404 });
     }
@@ -113,7 +114,7 @@ export async function PATCH(
     }
 
     const db = getDb();
-    const group = db.prepare('SELECT * FROM chat_groups WHERE id = ?').get(groupId) as any;
+    const group = db.prepare('SELECT * FROM chat_groups WHERE id = ?').get(groupId) as Row;
     if (!group) {
       return NextResponse.json({ error: 'Grup tidak ditemukan' }, { status: 404 });
     }
@@ -168,7 +169,7 @@ export async function DELETE(
     }
 
     const db = getDb();
-    const group = db.prepare('SELECT * FROM chat_groups WHERE id = ?').get(groupId) as any;
+    const group = db.prepare('SELECT * FROM chat_groups WHERE id = ?').get(groupId) as Row;
     if (!group) {
       return NextResponse.json({ error: 'Grup tidak ditemukan' }, { status: 404 });
     }

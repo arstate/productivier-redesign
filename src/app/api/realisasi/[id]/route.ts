@@ -1,3 +1,4 @@
+import type { Row } from '@/types/db-rows';
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { requireAuth } from '@/lib/auth';
@@ -15,7 +16,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     const body = await request.json();
     const db = getDb();
 
-    const existing = db.prepare('SELECT * FROM realisasi WHERE id = ?').get(Number(id)) as any;
+    const existing = db.prepare('SELECT * FROM realisasi WHERE id = ?').get(Number(id)) as Row;
     if (!existing) {
       return NextResponse.json({ error: 'Data realisasi tidak ditemukan' }, { status: 404 });
     }
@@ -31,7 +32,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     }
 
     const updates: string[] = [];
-    const values: any[] = [];
+    const values: (string | number | null)[] = [];
 
     if (body.aktivitas !== undefined) {
       const cleanAkt = String(body.aktivitas).trim();
@@ -123,7 +124,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       LEFT JOIN users ua ON r.assigned_to_user_id = ua.id
       LEFT JOIN users ub ON r.assigned_by_user_id = ub.id
       WHERE r.id = ?
-    `).get(Number(id)) as any;
+    `).get(Number(id)) as Row;
 
     // If task was reassigned to a different user, trigger delegation notification
     if (
@@ -172,9 +173,9 @@ export async function PATCH(request: Request, context: RouteContext) {
     }
 
     return NextResponse.json({ success: true, realisasi: updated });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error PATCH /api/realisasi/[id]:', error);
-    return NextResponse.json({ error: error.message || 'Gagal memperbarui realisasi' }, { status: 500 });
+    return NextResponse.json({ error: (error instanceof Error ? error.message : '') || 'Gagal memperbarui realisasi' }, { status: 500 });
   }
 }
 
@@ -186,7 +187,7 @@ export async function DELETE(request: Request, context: RouteContext) {
     const { id } = await context.params;
     const db = getDb();
 
-    const existing = db.prepare('SELECT * FROM realisasi WHERE id = ?').get(Number(id)) as any;
+    const existing = db.prepare('SELECT * FROM realisasi WHERE id = ?').get(Number(id)) as Row;
     if (!existing) {
       return NextResponse.json({ error: 'Data realisasi tidak ditemukan' }, { status: 404 });
     }
@@ -202,8 +203,8 @@ export async function DELETE(request: Request, context: RouteContext) {
 
     db.prepare('DELETE FROM realisasi WHERE id = ?').run(Number(id));
     return NextResponse.json({ success: true, message: 'Laporan realisasi berhasil dihapus' });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error DELETE /api/realisasi/[id]:', error);
-    return NextResponse.json({ error: error.message || 'Gagal menghapus realisasi' }, { status: 500 });
+    return NextResponse.json({ error: (error instanceof Error ? error.message : '') || 'Gagal menghapus realisasi' }, { status: 500 });
   }
 }

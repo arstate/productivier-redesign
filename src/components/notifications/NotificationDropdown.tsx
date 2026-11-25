@@ -10,11 +10,8 @@ import {
   MessageSquare,
   CheckSquare,
   User,
-  ExternalLink,
   Trash2,
   Sparkles,
-  Clock,
-  ChevronRight,
 } from "lucide-react";
 import { NotificationType, UserType } from "@/types";
 
@@ -35,7 +32,6 @@ export default function NotificationDropdown({
   const [notifications, setNotifications] = useState<NotificationType[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [activeFilter, setActiveFilter] = useState<"all" | "ai_permission" | "chat" | "task" | "client">("all");
-  const [loading, setLoading] = useState(false);
   const [processingId, setProcessingId] = useState<number | null>(null);
 
   const dropdownRef = useRef<HTMLDivElement>(null);
