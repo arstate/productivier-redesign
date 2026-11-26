@@ -62,3 +62,15 @@
   - [x] Frontend: Di `src/components/dashboard/HomeTab.tsx`, kartu "Review & Kendala Tim" diintegrasikan dengan badge proyek dan tombol aksi langsung "Bahas di Chat" serta "Tanya Miu AI" yang otomatis membuka `ChatTab` dengan pesan draft yang terstruktur rapi.
   - [x] AI Assistant (Miu): Di `src/app/api/chat/messages/route.ts` & `src/app/api/ai/chat/route.ts`, AI Miu membaca seluruh proyek yang terhubung ke grup chat, dan saat dipanggil dengan tag `/project [Nama Proyek]`, Miu mengekstrak dossier lengkap proyek tersebut (target, realisasi, persentase, deadline, kendala tim) dan memberikan analisis solutif secara mendalam.
   - [x] Verifikasi: `npx tsc --noEmit` lolos 0 error, `npm run build` sukses 100%, Next.js server berjalan di port 3007 dengan HTTP 200, dan seluruh endpoint REST telah diuji via curl.
+
+- [x] Security, Auth, Dark Mode & Multi-Viewport QA (`v2.6.0` — `3def372`):
+  - [x] Cookie `HttpOnly` HMAC-SHA256 (`prod_session`) di `src/lib/auth.ts` (`requireAuth` / `requireAdmin`) + `?token=` gate di `/client/project/[id]`.
+  - [x] Dark Mode tokens deterministik (`globals.css`, `localStorage`) + 5-pass CDP QA across 5 viewports.
+- [x] ESLint Zero Cleanup (`v2.6.1` — `e835d56`):
+  - [x] `src/types/db-rows.ts` (`Row`) + typing `DatabaseSync`, `error instanceof Error`, Web Speech API; `eslint src` **0 errors, 0 warnings** (turun dari 244/66).
+- [x] Low-Spec Performance & SQLite Tuning (`v2.6.2` — `e569001`):
+  - [x] `MotionProvider` (`LazyMotion` async `domMax` + `MotionConfig reducedMotion="user"`), konversi 12 komponen ke `m` (`MotionEl` di `ChatTab.tsx`).
+  - [x] `next/dynamic` code splitting untuk 8 tab + `FloatingAIAgent` + `ProjectDetailView` + `GroupInfoModal` (chunk JS maks turun dari `530 KB` -> `224 KB`).
+  - [x] Fixed GPU background layer di `layout.tsx`, hapus `background-attachment: fixed`, serta bersihkan 11 `backdrop-blur-md` card di `ProjectDetailView.tsx`.
+  - [x] `useVisibilityPolling` (`document.hidden` pause) + delta fetch `after_id` di `ChatTab.tsx` & `/api/chat/messages`.
+  - [x] SQLite `WAL`, `synchronous = NORMAL`, `temp_store = MEMORY`, `cache_size = -16000`, `busy_timeout = 5000`, & 8 hot-path indexes di `src/lib/db.ts`.

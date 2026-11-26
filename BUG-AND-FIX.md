@@ -1,6 +1,20 @@
 # 🐞 PRODUCTIVIER REDESIGN — BUG AND FIX LOG
 *Audit & Hardening Report — 25 November 2026*  
-*Versi: v2.5.0 Ecosystem & Collaborative Hub*
+*Versi Terkini: v2.6.2 Low-Spec Performance & Hardening*
+
+---
+
+## ⚡ Pembaruan & Perbaikan Terkini (`v2.6.1` – `v2.6.2`)
+
+### A. ESLint Zero Cleanup (`v2.6.1` — `e835d56`)
+- **Gejala:** `eslint src` melaporkan **244 errors + 66 warnings** (mayoritas `@typescript-eslint/no-explicit-any` di `api/ai/chat` & `api/ai/actions`, unused imports/vars, serta Web Speech API `window as any`).
+- **Solusi:** Memusatkan tipe row DB ke `src/types/db-rows.ts` (`Row`), mengetik parameter `DatabaseSync` & `catch (error)`, mengetik Web Speech API di `FloatingAIAgent.tsx`, menghapus dead imports/vars, serta memberi alasan eksplisit pada aturan hook/`<img>` yang disengaja.
+- **Verifikasi:** `eslint src` -> **0 error, 0 warning**, `tsc --noEmit` -> **0 error**.
+
+### B. Low-Spec Bottleneck, Scroll Jank & Typo Index SQLite `calendar_events(date)` (`v2.6.2` — `e569001`)
+- **Gejala:** Chunk JS awal mencapai **530 KB** (0 `next/dynamic`), `background-attachment: fixed` memicu repaint saat scroll, 11 `backdrop-blur-md` di `ProjectDetailView.tsx`, 3 polling tetap aktif di background tab, serta sempat terjadi `HTTP 500` di `/api/login` saat `idx_calendar_start` merujuk kolom `start_date` yang tidak ada di `calendar_events`.
+- **Solusi:** Lazy-load tab & modal berat via `next/dynamic` (chunk maks turun ke **224 KB**), `MotionProvider` (`LazyMotion` async `domMax` + konversi 12 file ke `m` / `MotionEl`), isolasi background layer di `layout.tsx`, `useVisibilityPolling` + delta `after_id` chat, serta `WAL` + 8 index SQLite dengan kolom valid `calendar_events(date)`.
+- **Verifikasi:** `test_markdown.mjs` (**9 PASS**), `test_ecosystem.mjs` (**56 PASS, 0 FAIL**), CDP QA `pass7` (0 console/page/HTTP error).
 
 ---
 

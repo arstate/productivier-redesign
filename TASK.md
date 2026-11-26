@@ -28,5 +28,9 @@ Berdasarkan dokumen master `system_ecosystem_gap_and_implementation_plan.md` dan
 - **TypeScript Static Analysis (`./node_modules/.bin/tsc --noEmit`):** **0 error**.
 - **Targeted ESLint (18 file inti terdampak):** **0 error**.
 - **Build Verification:** `npm run build` (Turbopack Next.js 16.4.6) selesai tanpa error (Status: 0).
-- **Live Browser CDP Multi-Viewport QA (Port `9223` — 5 Passes Completed):** **23/23 PASS** pada Pass 5 (Desktop `1440x900`, Laptop `1280x800`, Tablet `768x1024`, Mobile `390x844` & `360x800`, Light + instant Dark Mode + persistence, Admin + Karyawan, & tokenized Client Portal) dengan **0 console/page/HTTP errors**.
-- **Server Produksi:** Berjalan aktif pada `http://127.0.0.1:3007`.
+- **Live Browser CDP Multi-Viewport QA (Port `9223` — 5 Passes Completed + Pass 6/7):** Pass 7 pada `v2.6.2` (`localhost:3007`) seluruh skenario PASS dengan **0 console/page/HTTP errors**.
+- **Latest Releases:**
+  - `v2.6.0` (`3def372`): Cookie `HttpOnly` auth, `share_token` client portal, Dark Mode fix, & 5-pass CDP QA.
+  - `v2.6.1` (`e835d56`): ESLint Zero (**244 errors + 66 warnings -> 0/0**), `Row` boundary typing di `src/types/db-rows.ts`.
+  - `v2.6.2` (`e569001`): Optimasi device spek rendah (`LazyMotion` async `domMax`, `next/dynamic` chunk max **224 KB** dari **530 KB**, GPU scroll fix, `useVisibilityPolling` + delta `after_id`, SQLite WAL + 8 indexes).
+- **Server Produksi:** Dijalankan lokal pada port `3007` (saat aktif).
